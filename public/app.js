@@ -36,7 +36,16 @@ async function managedAccesses(selectedId){
   const actions=document.createElement('div');actions.className='managed-actions';
   const save=node('button','Guardar cambios');save.type='submit';
   const feedback=node('span','');feedback.className='muted';feedback.setAttribute('role','status');
-  actions.append(save,feedback);form.append(actions);
+  const remove=node('button','Eliminar acceso');remove.type='button';remove.className='secondary';
+  remove.onclick=async()=>{
+   if(!confirm('¿Eliminar el acceso «'+a.title+'» de '+a.employee_name+'? Esta acción es permanente y también elimina la contraseña guardada.'))return;
+   remove.disabled=true;feedback.textContent='Eliminando...';
+   try{
+    await api('/api/admin/accesses/'+a.id,{method:'DELETE'});
+    msg('Acceso eliminado');await managedAccesses();await accesses();
+   }catch(err){feedback.textContent='Error: '+err.message;remove.disabled=false}
+  };
+  actions.append(save,remove,feedback);form.append(actions);
   form.addEventListener('submit',async e=>{
    e.preventDefault();save.disabled=true;feedback.textContent='Guardando...';
    try{
@@ -54,7 +63,16 @@ async function managedAccesses(selectedId){
  function updatePlatforms(preferred){
   accessSelect.replaceChildren(new Option('Elegí una plataforma',''));
   const available=items.filter(a=>String(a.employee_id)===employeeSelect.value);
-  for(const a of available)accessSelect.append(new Option(a.title+' — '+a.username,String(a.id)));
+  const counts=new Map();
+  for(const a of available){
+   const key=[a.title.trim().toLowerCase(),a.url.trim().toLowerCase(),a.username.trim().toLowerCase()].join('|');
+   counts.set(key,(counts.get(key)||0)+1);
+  }
+  for(const a of available){
+   const key=[a.title.trim().toLowerCase(),a.url.trim().toLowerCase(),a.username.trim().toLowerCase()].join('|');
+   const repeated=counts.get(key)>1;
+   accessSelect.append(new Option(a.title+' — '+a.username+(repeated?' (POSIBLE DUPLICADO · ID '+a.id+')':''),String(a.id)));
+  }
   accessSelect.disabled=!available.length;
   accessSelect.value=available.some(a=>String(a.id)===preferred)?preferred:'';
   renderEditor();
