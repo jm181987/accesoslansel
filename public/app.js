@@ -9,5 +9,22 @@ async function users(){const list=await api('/api/users'),select=$('#userId'),ro
 $('#loginForm').onsubmit=async e=>{e.preventDefault();try{await post('/api/login',Object.fromEntries(new FormData(e.target)));e.target.reset();msg('');await load()}catch(err){msg(err.message)}};
 $('#logout').onclick=async()=>{await post('/api/logout',{});location.reload()};
 $('#newUser').onsubmit=async e=>{e.preventDefault();try{await post('/api/users',Object.fromEntries(new FormData(e.target)));e.target.reset();msg('Funcionario creado');await users()}catch(err){msg(err.message)}};
+
+const platformUrls={
+ 'CRM MONETY':'https://crm.monetytrade.com/',
+ 'CRM MERCADOS':'https://mercadosinvest.tradingcrm.com/',
+ 'CRM VENTURY':'https://venturyfx.tradingcrm.com/',
+ 'SHARKWPP':'https://sharkwpp.linetechlabs.com/',
+ 'VOISO':'',
+ 'VOICESPIN':'',
+ 'CLOUD':'https://cloud.clickwa.tech/',
+ 'FEROZO':'https://ferozo.email/',
+ 'COMIDAS LANSEL':'https://comidalansel.vercel.app/'
+};
+$('#platformPreset').addEventListener('change',e=>{
+ const name=e.target.value;
+ $('#platformTitle').value=name;
+ $('#newAccess').elements.url.value=platformUrls[name]||'';
+});
 $('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);e.target.reset();msg('Acceso asignado')}catch(err){msg(err.message)}};
 load();
