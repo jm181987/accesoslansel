@@ -87,11 +87,13 @@ app.get('/api/admin/accesses',auth,admin,run(async(req,res)=>{
 app.patch('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
  const id=String(req.params.id);
  if(!/^\d+$/.test(id))return res.status(400).json({error:'Identificador inválido'});
- const {title,url,username}=req.body||{};
+ const {title,url,username,password}=req.body||{};
+ if(password!==undefined&&(typeof password!=='string'||password.length>4096))return res.status(400).json({error:'Contraseña inválida'});
  if(typeof title!=='string'||!title.trim()||typeof username!=='string'||!username.trim()||typeof url!=='string')return res.status(400).json({error:'Completá nombre, enlace y usuario'});
  let parsed;
  try{parsed=new URL(url);if(!['https:','http:'].includes(parsed.protocol)||parsed.username||parsed.password)throw Error()}catch{return res.status(400).json({error:'Enlace inválido. Usá una URL http o https'})}
- const result=await db.query('UPDATE accesses SET title=$1,url=$2,username=$3 WHERE id=$4 RETURNING id,employee_id,title,url,username',[title.trim(),parsed.href,username.trim(),id]);
+ const changePassword=typeof password==='string'&&password.length>0;
+ const result=await db.query('UPDATE accesses SET title=$1,url=$2,username=$3,secret=CASE WHEN $5::boolean THEN $6 ELSE secret END WHERE id=$4 RETURNING id,employee_id,title,url,username',[title.trim(),parsed.href,username.trim(),id,changePassword,changePassword?enc(password):null]);
  if(!result.rowCount)return res.status(404).json({error:'Acceso no encontrado'});
  res.set('Cache-Control','no-store').json(result.rows[0]);
 }));
