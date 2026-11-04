@@ -7,8 +7,9 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 const app=express(),db=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,connectionTimeoutMillis:10000,idleTimeoutMillis:10000,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:true}:undefined});
 app.use(helmet());app.use(express.json());app.use(cookieParser());app.use(express.static('public'));
-for(const k of ['DATABASE_URL','APP_ENCRYPTION_KEY','SESSION_SECRET'])if(!process.env[k])throw Error('Missing '+k);
-const key=Buffer.from(process.env.APP_ENCRYPTION_KEY,'hex');if(key.length!==32)throw Error('APP_ENCRYPTION_KEY must be 64 hex chars');
+const missing=['DATABASE_URL','APP_ENCRYPTION_KEY','SESSION_SECRET'].filter(k=>!process.env[k]);
+const key=Buffer.from(process.env.APP_ENCRYPTION_KEY||'','hex');
+const configError=missing.length?'Missing required environment variables':key.length!==32?'Invalid encryption key length':null;
 const h=x=>crypto.createHmac('sha256',process.env.SESSION_SECRET).update(x).digest('hex');
 function enc(s){const iv=crypto.randomBytes(12),c=crypto.createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,c.update(s,'utf8'),c.final(),c.getAuthTag()]).toString('base64')}
 function dec(s){const b=Buffer.from(s,'base64'),c=crypto.createDecipheriv('aes-256-gcm',key,b.subarray(0,12));c.setAuthTag(b.subarray(b.length-16));return Buffer.concat([c.update(b.subarray(12,b.length-16)),c.final()]).toString()}
@@ -32,9 +33,11 @@ await db.query("CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_
 if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){if(process.env.ADMIN_PASSWORD.length<12)throw Error('Admin password too short');const email=process.env.ADMIN_EMAIL.toLowerCase();const r=await db.query('SELECT id FROM employees WHERE email=$1',[email]);if(!r.rowCount)await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES('Administrador',$1,$2,'admin')",[email,await bcrypt.hash(process.env.ADMIN_PASSWORD,12)])}
 }
 let ready;
+app.get('/api/health',async(req,res)=>{if(configError)return res.status(503).json({status:'configuration_error'});try{await db.query('SELECT 1');res.json({status:'ok',database:'connected'})}catch(e){console.error('Database health check failed',e.code||e.message);res.status(503).json({status:'database_unavailable'})}});
 export default function handler(req,res){
+ if(configError){console.error('Accesos LANSEL configuration error:',configError);return res.status(503).json({error:'Configuración del servidor incompleta'});}
  ready??=init().catch(err=>{ready=undefined;throw err});
  return ready.then(()=>app(req,res)).catch(err=>{console.error(err);if(!res.headersSent)res.status(503).json({error:'Servicio no disponible'})});
 }
-if(!process.env.VERCEL) init().then(()=>app.listen(process.env.PORT||3000)).catch(e=>{console.error(e);process.exit(1)});
+if(!process.env.VERCEL && !configError) init().then(()=>app.listen(process.env.PORT||3000)).catch(e=>{console.error(e);process.exit(1)});
 
