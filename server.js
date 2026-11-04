@@ -93,7 +93,7 @@ app.patch('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
 }));
 app.delete('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
  const id=String(req.params.id);
- if(!/^\\d+$/.test(id))return res.status(400).json({error:'Identificador inválido'});
+ if(!/^[0-9]+$/.test(id))return res.status(400).json({error:'Identificador inválido'});
  const result=await db.query('DELETE FROM accesses WHERE id=$1 RETURNING id,title,employee_id',[id]);
  if(!result.rowCount)return res.status(404).json({error:'Acceso no encontrado'});
  res.set('Cache-Control','no-store').json({ok:true,id:result.rows[0].id});
