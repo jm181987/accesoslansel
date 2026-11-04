@@ -33,6 +33,9 @@ async function managedAccesses(selectedId){
    const input=document.createElement('input');input.name=name;input.type=type;input.required=true;input.value=value;
    wrapper.append(input);form.append(wrapper);
   }
+  const passwordLabel=document.createElement('label');passwordLabel.textContent='Nueva contraseña (opcional)';
+  const passwordInput=document.createElement('input');passwordInput.name='password';passwordInput.type='password';passwordInput.autocomplete='new-password';passwordInput.placeholder='Dejar vacío para conservar la actual';
+  passwordLabel.append(passwordInput);form.append(passwordLabel);
   const actions=document.createElement('div');actions.className='managed-actions';
   const save=node('button','Guardar cambios');save.type='submit';
   const feedback=node('span','');feedback.className='muted';feedback.setAttribute('role','status');
@@ -53,6 +56,7 @@ async function managedAccesses(selectedId){
     a.title=updated.title;a.url=updated.url;a.username=updated.username;
     heading.textContent=a.employee_name+' — '+a.title;
     const opt=[...accessSelect.options].find(o=>o.value===String(a.id));if(opt)opt.textContent=a.title+' — '+a.username;
+    passwordInput.value='';
     feedback.textContent='✓ Cambios guardados';
     await accesses();
    }catch(err){feedback.textContent='Error: '+err.message}
