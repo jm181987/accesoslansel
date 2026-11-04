@@ -7,16 +7,28 @@ async function load(){try{const me=await api('/api/me');$('#login').classList.ad
 async function accesses(){const items=await api('/api/accesses'),root=$('#cards');root.replaceChildren();if(!items.length)root.append(node('p','No tenés accesos asignados.'));for(const a of items){const c=node('div','');c.className='card';c.append(node('h3',a.title),node('p','Usuario: '+a.username));const link=node('a','Abrir enlace');link.href=a.url;link.target='_blank';link.rel='noopener noreferrer';link.className='action';const copy=node('button','Copiar usuario');copy.className='secondary';copy.onclick=()=>navigator.clipboard.writeText(a.username).then(()=>msg('Usuario copiado'));const show=node('button','Ver contraseña');show.onclick=async()=>{try{const p=await api('/api/accesses/'+a.id+'/password');c.querySelector('.secret')?.remove();const area=node('div','');area.className='secret';area.append(node('p',p.password));const b=node('button','Copiar contraseña');b.onclick=()=>navigator.clipboard.writeText(p.password).then(()=>msg('Contraseña copiada'));area.append(b);c.append(area);setTimeout(()=>area.remove(),30000)}catch(e){msg(e.message)}};c.append(link,copy,show);root.append(c)}}
 async function users(){const list=await api('/api/users'),select=$('#userId'),root=$('#users');select.replaceChildren();root.replaceChildren();for(const u of list){if(u.role!=='admin'){const opt=node('option',u.name+' — '+u.email);opt.value=u.id;select.append(opt)}const line=node('div','');line.className='user';line.append(node('strong',u.name+' — '+u.email+' ('+(u.active?'Activo':'Inactivo')+')'));if(u.role!=='admin'){const b=node('button',u.active?'Desactivar':'Activar');b.className='secondary';b.onclick=async()=>{try{await api('/api/users/'+u.id+'/status',{method:'PATCH',body:JSON.stringify({active:!u.active})});await users()}catch(e){msg(e.message)}};line.append(b)}root.append(line)}}
 
-async function managedAccesses(){
+async function managedAccesses(selectedId){
  const items=await api('/api/admin/accesses'),root=$('#managedAccesses');
  root.replaceChildren();
  if(!items.length){root.append(node('p','Todavía no hay accesos asignados.'));return}
- for(const a of items){
+ const filterLabel=document.createElement('label');filterLabel.textContent='Seleccionar funcionario';
+ const employeeSelect=document.createElement('select');
+ const employees=[...new Map(items.map(a=>[String(a.employee_id),{id:String(a.employee_id),name:a.employee_name,email:a.employee_email}])).values()];
+ const emptyEmployee=new Option('Elegí un funcionario','');employeeSelect.append(emptyEmployee);
+ for(const u of employees)employeeSelect.append(new Option(u.name+' — '+u.email,u.id));
+ filterLabel.append(employeeSelect);
+ const accessLabel=document.createElement('label');accessLabel.textContent='Seleccionar plataforma';
+ const accessSelect=document.createElement('select');accessSelect.disabled=true;
+ accessLabel.append(accessSelect);
+ const editor=document.createElement('div');
+ root.append(filterLabel,accessLabel,editor);
+ function renderEditor(){
+  editor.replaceChildren();
+  const a=items.find(x=>String(x.id)===accessSelect.value);
+  if(!a)return;
   const form=document.createElement('form');form.className='managed-access';
-  const heading=node('strong',a.employee_name+' — '+a.title);
-  const fields=[['title','Plataforma',a.title,'text'],['url','Enlace',a.url,'url'],['username','Usuario',a.username,'text']];
-  form.append(heading);
-  for(const [name,label,value,type] of fields){
+  const heading=node('strong',a.employee_name+' — '+a.title);form.append(heading);
+  for(const [name,label,value,type] of [['title','Plataforma',a.title,'text'],['url','Enlace',a.url,'url'],['username','Usuario',a.username,'text']]){
    const wrapper=document.createElement('label');wrapper.textContent=label;
    const input=document.createElement('input');input.name=name;input.type=type;input.required=true;input.value=value;
    wrapper.append(input);form.append(wrapper);
@@ -28,17 +40,29 @@ async function managedAccesses(){
   form.addEventListener('submit',async e=>{
    e.preventDefault();save.disabled=true;feedback.textContent='Guardando...';
    try{
-    const data=Object.fromEntries(new FormData(form));
-    const updated=await api('/api/admin/accesses/'+a.id,{method:'PATCH',body:JSON.stringify(data)});
+    const updated=await api('/api/admin/accesses/'+a.id,{method:'PATCH',body:JSON.stringify(Object.fromEntries(new FormData(form)))});
     a.title=updated.title;a.url=updated.url;a.username=updated.username;
     heading.textContent=a.employee_name+' — '+a.title;
+    const opt=[...accessSelect.options].find(o=>o.value===String(a.id));if(opt)opt.textContent=a.title+' — '+a.username;
     feedback.textContent='✓ Cambios guardados';
     await accesses();
    }catch(err){feedback.textContent='Error: '+err.message}
    finally{save.disabled=false}
   });
-  root.append(form);
+  editor.append(form);
  }
+ function updatePlatforms(preferred){
+  accessSelect.replaceChildren(new Option('Elegí una plataforma',''));
+  const available=items.filter(a=>String(a.employee_id)===employeeSelect.value);
+  for(const a of available)accessSelect.append(new Option(a.title+' — '+a.username,String(a.id)));
+  accessSelect.disabled=!available.length;
+  accessSelect.value=available.some(a=>String(a.id)===preferred)?preferred:'';
+  renderEditor();
+ }
+ employeeSelect.addEventListener('change',()=>updatePlatforms(''));
+ accessSelect.addEventListener('change',renderEditor);
+ const selected=items.find(a=>String(a.id)===String(selectedId));
+ if(selected){employeeSelect.value=String(selected.employee_id);updatePlatforms(String(selected.id))}
 }
 $('#loginForm').onsubmit=async e=>{e.preventDefault();try{await post('/api/login',Object.fromEntries(new FormData(e.target)));e.target.reset();msg('');await load()}catch(err){msg(err.message)}};
 $('#pairExtension').onclick=async()=>{try{const r=await post('/api/extension/pair',{});$('#pairCode').textContent=r.code;$('#pairResult').classList.remove('hidden');msg('Código generado. Vence en 5 minutos.')}catch(e){msg(e.message)}};
