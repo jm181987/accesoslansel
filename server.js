@@ -62,7 +62,7 @@ app.get('/api/extension/accesses',extensionAuth,run(async(req,res)=>{
 app.post('/api/extension/fill',extensionAuth,run(async(req,res)=>{
  const id=String(req.body?.id||'');
  let origin;try{origin=new URL(String(req.body?.origin||''));if(origin.protocol!=='https:'||origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)throw Error()}catch{return res.status(400).json({error:'Origen inválido'})}
- if(!/^\\d+$/.test(id))return res.status(400).json({error:'Acceso inválido'});
+ if(!/^[0-9]+$/.test(id))return res.status(400).json({error:'Acceso inválido'});
  const r=await db.query('SELECT url,username,secret FROM accesses WHERE id=$1 AND employee_id=$2',[id,req.extensionUser.id]);
  if(!r.rowCount||new URL(r.rows[0].url).origin!==origin.origin)return res.status(403).json({error:'Acceso no autorizado para este sitio'});
  res.set('Cache-Control','no-store').json({username:r.rows[0].username,password:dec(r.rows[0].secret)});
