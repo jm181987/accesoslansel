@@ -25,6 +25,53 @@ app.post('/api/logout',auth,run(async(req,res)=>{await db.query('DELETE FROM ses
 app.get('/api/me',auth,(req,res)=>res.json(req.user));
 app.get('/api/accesses',auth,run(async(req,res)=>{const r=await db.query('SELECT id,title,url,username FROM accesses WHERE employee_id=$1 ORDER BY title',[req.user.id]);res.json(r.rows)}));
 app.get('/api/accesses/:id/password',auth,run(async(req,res)=>{const r=await db.query('SELECT secret FROM accesses WHERE id=$1 AND employee_id=$2',[req.params.id,req.user.id]);if(!r.rowCount)return res.status(404).json({error:'No encontrado'});res.set('Cache-Control','no-store');res.json({password:dec(r.rows[0].secret)})}));
+
+const extensionAuth=run(async(req,res,next)=>{
+ const match=/^Bearer ([a-f0-9]{64})$/.exec(req.get('Authorization')||'');
+ if(!match)return res.status(401).json({error:'Vinculá la extensión con LANSEL'});
+ const r=await db.query("SELECT u.id,u.name FROM extension_tokens t JOIN employees u ON u.id=t.user_id WHERE t.token=$1 AND t.expires>now() AND u.active=true",[h(match[1])]);
+ if(!r.rowCount)return res.status(401).json({error:'Vinculación vencida. Volvé a vincular la extensión'});
+ req.extensionUser=r.rows[0];next();
+});
+app.post('/api/extension/pair',auth,run(async(req,res)=>{
+ const code=crypto.randomBytes(24).toString('hex');
+ await db.query("INSERT INTO extension_pair_codes(code,user_id,expires) VALUES($1,$2,now()+interval '5 minutes')",[h(code),req.user.id]);
+ res.set('Cache-Control','no-store').json({code,expiresInSeconds:300});
+}));
+app.post('/api/extension/exchange',run(async(req,res)=>{
+ const code=String(req.body?.code||'').trim().toLowerCase();
+ if(!/^[a-f0-9]{48}$/.test(code))return res.status(400).json({error:'Código inválido'});
+ const client=await db.connect();
+ try{
+  await client.query('BEGIN');
+  const r=await client.query("DELETE FROM extension_pair_codes WHERE code=$1 AND expires>now() RETURNING user_id",[h(code)]);
+  if(!r.rowCount){await client.query('ROLLBACK');return res.status(401).json({error:'Código vencido o utilizado'})}
+  const u=await client.query('SELECT id FROM employees WHERE id=$1 AND active=true',[r.rows[0].user_id]);
+  if(!u.rowCount){await client.query('ROLLBACK');return res.status(403).json({error:'Usuario inactivo'})}
+  const token=crypto.randomBytes(32).toString('hex');
+  await client.query("INSERT INTO extension_tokens(token,user_id,expires) VALUES($1,$2,now()+interval '12 hours')",[h(token),u.rows[0].id]);
+  await client.query('COMMIT');
+  res.set('Cache-Control','no-store').json({token,expiresInSeconds:43200});
+ }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
+}));
+app.get('/api/extension/accesses',extensionAuth,run(async(req,res)=>{
+ let origin;try{origin=new URL(String(req.query.origin||''));if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw Error()}catch{return res.status(400).json({error:'Origen inválido'})}
+ const r=await db.query('SELECT id,title,url,username FROM accesses WHERE employee_id=$1',[req.extensionUser.id]);
+ res.set('Cache-Control','no-store').json(r.rows.filter(a=>{try{const u=new URL(a.url);return u.protocol==='https:'&&u.origin===origin.origin}catch{return false}}));
+}));
+app.post('/api/extension/fill',extensionAuth,run(async(req,res)=>{
+ const id=String(req.body?.id||'');
+ let origin;try{origin=new URL(String(req.body?.origin||''));if(origin.protocol!=='https:'||origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)throw Error()}catch{return res.status(400).json({error:'Origen inválido'})}
+ if(!/^\\d+$/.test(id))return res.status(400).json({error:'Acceso inválido'});
+ const r=await db.query('SELECT url,username,secret FROM accesses WHERE id=$1 AND employee_id=$2',[id,req.extensionUser.id]);
+ if(!r.rowCount||new URL(r.rows[0].url).origin!==origin.origin)return res.status(403).json({error:'Acceso no autorizado para este sitio'});
+ res.set('Cache-Control','no-store').json({username:r.rows[0].username,password:dec(r.rows[0].secret)});
+}));
+app.post('/api/extension/revoke',extensionAuth,run(async(req,res)=>{
+ const token=req.get('Authorization').slice(7);
+ await db.query('DELETE FROM extension_tokens WHERE token=$1',[h(token)]);
+ res.json({ok:true});
+}));
 app.get('/api/users',auth,admin,run(async(req,res)=>{const r=await db.query('SELECT id,name,email,role,active FROM employees ORDER BY name');res.json(r.rows)}));
 app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES($1,$2,$3,'user') RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12)]);res.status(201).json(r.rows[0])}));
 app.post('/api/users/:id/accesses',auth,admin,run(async(req,res)=>{const {title,url,username,password}=req.body;let u;try{u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error()}catch{return res.status(400).json({error:'URL inválida'})}if(!title?.trim()||!username?.trim()||!password)return res.status(400).json({error:'Completá los campos'});const r=await db.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5) RETURNING id,title,url,username',[req.params.id,title.trim(),u.href,username.trim(),enc(password)]);res.status(201).json(r.rows[0])}));
@@ -34,6 +81,8 @@ async function init(){
 await db.query("CREATE TABLE IF NOT EXISTS employees(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL DEFAULT 'user',active BOOLEAN NOT NULL DEFAULT true)");
 await db.query("CREATE TABLE IF NOT EXISTS accesses(id BIGSERIAL PRIMARY KEY,employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,title TEXT NOT NULL,url TEXT NOT NULL,username TEXT NOT NULL,secret TEXT NOT NULL)");
 await db.query("CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
+await db.query("CREATE TABLE IF NOT EXISTS extension_pair_codes(code TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
+await db.query("CREATE TABLE IF NOT EXISTS extension_tokens(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){if(process.env.ADMIN_PASSWORD.length<12)throw Error('Admin password too short');const email=process.env.ADMIN_EMAIL.toLowerCase();const r=await db.query('SELECT id FROM employees WHERE email=$1',[email]);if(!r.rowCount)await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES('Administrador',$1,$2,'admin')",[email,await bcrypt.hash(process.env.ADMIN_PASSWORD,12)])}
 }
 let ready;
