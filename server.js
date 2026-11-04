@@ -74,7 +74,7 @@ app.post('/api/extension/revoke',extensionAuth,run(async(req,res)=>{
 }));
 app.get('/api/users',auth,admin,run(async(req,res)=>{const r=await db.query('SELECT id,name,email,role,active FROM employees ORDER BY name');res.json(r.rows)}));
 app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES($1,$2,$3,'user') RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12)]);res.status(201).json(r.rows[0])}));
-app.post('/api/users/:id/accesses',auth,admin,run(async(req,res)=>{const {title,url,username,password}=req.body;let u;try{u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error()}catch{return res.status(400).json({error:'URL inválida'})}if(!title?.trim()||!username?.trim()||!password)return res.status(400).json({error:'Completá los campos'});const r=await db.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5) RETURNING id,title,url,username',[req.params.id,title.trim(),u.href,username.trim(),enc(password)]);res.status(201).json(r.rows[0])}));
+app.post('/api/users/:id/accesses',auth,admin,run(async(req,res)=>{const {title,url,username,password}=req.body;let u;try{u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error()}catch{return res.status(400).json({error:'URL inválida'})}if(!title?.trim()||!username?.trim()||!password)return res.status(400).json({error:'Completá los campos'});const existing=await db.query('SELECT id FROM accesses WHERE employee_id=$1 AND lower(trim(title))=lower($2) AND lower(trim(username))=lower($3) AND url=$4 LIMIT 1',[req.params.id,title.trim(),username.trim(),u.href]);if(existing.rowCount)return res.status(409).json({error:'Este acceso ya está asignado al funcionario. Editá el registro existente en lugar de duplicarlo'});const r=await db.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5) RETURNING id,title,url,username',[req.params.id,title.trim(),u.href,username.trim(),enc(password)]);res.status(201).json(r.rows[0])}));
 
 app.get('/api/admin/accesses',auth,admin,run(async(req,res)=>{
  const result=await db.query('SELECT a.id,a.employee_id,a.title,a.url,a.username,e.name AS employee_name,e.email AS employee_email FROM accesses a JOIN employees e ON e.id=a.employee_id ORDER BY e.name,a.title');
@@ -90,6 +90,13 @@ app.patch('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
  const result=await db.query('UPDATE accesses SET title=$1,url=$2,username=$3 WHERE id=$4 RETURNING id,employee_id,title,url,username',[title.trim(),parsed.href,username.trim(),id]);
  if(!result.rowCount)return res.status(404).json({error:'Acceso no encontrado'});
  res.set('Cache-Control','no-store').json(result.rows[0]);
+}));
+app.delete('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
+ const id=String(req.params.id);
+ if(!/^\\d+$/.test(id))return res.status(400).json({error:'Identificador inválido'});
+ const result=await db.query('DELETE FROM accesses WHERE id=$1 RETURNING id,title,employee_id',[id]);
+ if(!result.rowCount)return res.status(404).json({error:'Acceso no encontrado'});
+ res.set('Cache-Control','no-store').json({ok:true,id:result.rows[0].id});
 }));
 app.patch('/api/users/:id/status',auth,admin,run(async(req,res)=>{if(String(req.user.id)===req.params.id)return res.status(400).json({error:'No podés desactivarte'});await db.query('UPDATE employees SET active=$1 WHERE id=$2',[req.body.active===true,req.params.id]);res.json({ok:true})}));
 app.use((err,req,res,next)=>{console.error(err);res.status(err.code==='23505'?409:500).json({error:err.code==='23505'?'Correo ya registrado':'Error interno'})});
