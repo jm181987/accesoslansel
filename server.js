@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-const app=express(),db=new pg.Pool({connectionString:process.env.DATABASE_URL});
+const app=express(),db=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,connectionTimeoutMillis:10000,idleTimeoutMillis:10000,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:true}:undefined});
 app.use(helmet());app.use(express.json());app.use(cookieParser());app.use(express.static('public'));
 for(const k of ['DATABASE_URL','APP_ENCRYPTION_KEY','SESSION_SECRET'])if(!process.env[k])throw Error('Missing '+k);
 const key=Buffer.from(process.env.APP_ENCRYPTION_KEY,'hex');if(key.length!==32)throw Error('APP_ENCRYPTION_KEY must be 64 hex chars');
@@ -31,4 +31,10 @@ await db.query("CREATE TABLE IF NOT EXISTS accesses(id BIGSERIAL PRIMARY KEY,emp
 await db.query("CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){if(process.env.ADMIN_PASSWORD.length<12)throw Error('Admin password too short');const email=process.env.ADMIN_EMAIL.toLowerCase();const r=await db.query('SELECT id FROM employees WHERE email=$1',[email]);if(!r.rowCount)await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES('Administrador',$1,$2,'admin')",[email,await bcrypt.hash(process.env.ADMIN_PASSWORD,12)])}
 }
-init().then(()=>app.listen(process.env.PORT||3000)).catch(e=>{console.error(e);process.exit(1)});
+let ready;
+export default function handler(req,res){
+ ready??=init().catch(err=>{ready=undefined;throw err});
+ return ready.then(()=>app(req,res)).catch(err=>{console.error(err);if(!res.headersSent)res.status(503).json({error:'Servicio no disponible'})});
+}
+if(!process.env.VERCEL) init().then(()=>app.listen(process.env.PORT||3000)).catch(e=>{console.error(e);process.exit(1)});
+
