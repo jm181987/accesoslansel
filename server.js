@@ -81,13 +81,18 @@ app.get('/api/extension/platforms',extensionAuth,run(async(req,res)=>{
  const platforms=r.rows.filter(a=>{try{const u=new URL(a.url);return u.protocol==='https:'&&!u.username&&!u.password}catch{return false}});
  res.set('Cache-Control','no-store').json(platforms);
 }));
+function crmKind(title){
+ const t=String(title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+ if(/\bVENTURY\b/.test(t))return 'ventury';
+ if(/\bMERCADOS\b/.test(t))return 'mercados';
+ return null;
+}
 function allowedAccessOrigin(access,origin){
- let saved;try{saved=new URL(access.url).origin}catch{return false}
+ let saved;try{const u=new URL(access.url);if(u.protocol!=='https:')return false;saved=u.origin}catch{return false}
  if(saved===origin)return true;
- const title=String(access.title||'').trim().toUpperCase();
- if(title==='CRM VENTURY')return ['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(saved)&&['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(origin);
- if(title==='CRM MERCADOS')return origin==='https://mercadosinvest.tradingcrm.com'&&new URL(access.url).protocol==='https:';
- return false;
+ const kind=crmKind(access.title);
+ const allowed=kind==='ventury'?['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com']:kind==='mercados'?['https://mercadosinvest.tradingcrm.com']:null;
+ return !!allowed&&allowed.includes(saved)&&allowed.includes(origin);
 }
 app.get('/api/extension/accesses',extensionAuth,run(async(req,res)=>{
  let origin;try{origin=new URL(String(req.query.origin||''));if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw Error()}catch{return res.status(400).json({error:'Origen inválido'})}
