@@ -135,21 +135,6 @@ await db.query("CREATE TABLE IF NOT EXISTS accesses(id BIGSERIAL PRIMARY KEY,emp
 await db.query("CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 await db.query("CREATE TABLE IF NOT EXISTS extension_pair_codes(code TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 await db.query("CREATE TABLE IF NOT EXISTS extension_tokens(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
-await db.query("CREATE TABLE IF NOT EXISTS app_migrations(name TEXT PRIMARY KEY,applied_at TIMESTAMPTZ NOT NULL DEFAULT now())");
-const migration=await db.connect();
-try{
- await migration.query('BEGIN');
- const claimed=await migration.query("INSERT INTO app_migrations(name) VALUES('normalize_crm_urls_2026_11_05') ON CONFLICT DO NOTHING RETURNING name");
- if(claimed.rowCount){
-  await migration.query(`UPDATE accesses SET url=CASE
-   WHEN upper(trim(title))='CRM VENTURY' THEN 'https://venturyfx.tradingcrm.com/'
-   WHEN upper(trim(title))='CRM MERCADOS' THEN 'https://mercadosinvest.tradingcrm.com/'
-   ELSE url END
-   WHERE upper(trim(title)) IN ('CRM VENTURY','CRM MERCADOS')`);
- }
- await migration.query('COMMIT');
-}catch(e){await migration.query('ROLLBACK');throw e}finally{migration.release()}
-
 if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){if(process.env.ADMIN_PASSWORD.length<12)throw Error('Admin password too short');const email=process.env.ADMIN_EMAIL.toLowerCase();const r=await db.query('SELECT id FROM employees WHERE email=$1',[email]);if(!r.rowCount)await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES('Administrador',$1,$2,'admin')",[email,await bcrypt.hash(process.env.ADMIN_PASSWORD,12)])}
 }
 let ready;
