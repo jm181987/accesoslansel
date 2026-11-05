@@ -20,7 +20,7 @@ const API='https://accesoslansel.vercel.app';const $=id=>document.getElementById
     chrome.tabs.create({url});
    };
    row.append(title,open);
-   if(origin&&(new URL(item.url).origin===origin||(String(item.title||'').trim().toUpperCase()==='CRM VENTURY'&&new URL(item.url).origin==='https://adfs365.stg-tradingcrm.com'&&origin==='https://venturyfx.tradingcrm.com'))){
+   if(origin&&(new URL(item.url).origin===origin||(String(item.title||'').trim().toUpperCase()==='CRM VENTURY'&&['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(new URL(item.url).origin)&&['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(origin))||(String(item.title||'').trim().toUpperCase()==='CRM MERCADOS'&&origin==='https://mercadosinvest.tradingcrm.com'))){
     const fillButton=document.createElement('button');fillButton.type='button';fillButton.textContent='Completar credenciales';
     fillButton.onclick=()=>fill(item.id);row.append(fillButton);
    }
