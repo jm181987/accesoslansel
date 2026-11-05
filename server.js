@@ -76,6 +76,11 @@ app.get('/api/extension/me',extensionAuth,run(async(req,res)=>{
  const result=await db.query('SELECT COUNT(*)::int AS total FROM accesses WHERE employee_id=$1',[req.extensionUser.id]);
  res.set('Cache-Control','no-store').json({name:req.extensionUser.name,assignedAccessCount:result.rows[0].total});
 }));
+app.get('/api/extension/platforms',extensionAuth,run(async(req,res)=>{
+ const r=await db.query('SELECT id,title,url,username FROM accesses WHERE employee_id=$1 ORDER BY title,id',[req.extensionUser.id]);
+ const platforms=r.rows.filter(a=>{try{const u=new URL(a.url);return u.protocol==='https:'&&!u.username&&!u.password}catch{return false}});
+ res.set('Cache-Control','no-store').json(platforms);
+}));
 app.get('/api/extension/accesses',extensionAuth,run(async(req,res)=>{
  let origin;try{origin=new URL(String(req.query.origin||''));if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw Error()}catch{return res.status(400).json({error:'Origen inválido'})}
  const r=await db.query('SELECT id,title,url,username FROM accesses WHERE employee_id=$1',[req.extensionUser.id]);
