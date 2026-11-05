@@ -117,7 +117,7 @@ $('#newUser').onsubmit=async e=>{e.preventDefault();try{await post('/api/users',
 const platformUrls={
  'CRM MONETY':'https://crm.monetytrade.com/',
  'CRM MERCADOS':'https://mercadosinvest.tradingcrm.com/',
- 'CRM VENTURY':'https://adfs365.stg-tradingcrm.com/',
+ 'CRM VENTURY':'https://venturyfx.tradingcrm.com/',
  'SHARKWPP':'https://sharkwpp.linetechlabs.com/',
  'VOISO':'https://cc-dal01.voiso.com/users/sign_in',
  'VOICESPIN':'https://work-and-media.pbx.voicespin.com/panel/',
