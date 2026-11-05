@@ -81,10 +81,18 @@ app.get('/api/extension/platforms',extensionAuth,run(async(req,res)=>{
  const platforms=r.rows.filter(a=>{try{const u=new URL(a.url);return u.protocol==='https:'&&!u.username&&!u.password}catch{return false}});
  res.set('Cache-Control','no-store').json(platforms);
 }));
+function allowedAccessOrigin(access,origin){
+ let saved;try{saved=new URL(access.url).origin}catch{return false}
+ if(saved===origin)return true;
+ const title=String(access.title||'').trim().toUpperCase();
+ if(title==='CRM VENTURY')return ['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(saved)&&['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(origin);
+ if(title==='CRM MERCADOS')return origin==='https://mercadosinvest.tradingcrm.com'&&new URL(access.url).protocol==='https:';
+ return false;
+}
 app.get('/api/extension/accesses',extensionAuth,run(async(req,res)=>{
  let origin;try{origin=new URL(String(req.query.origin||''));if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw Error()}catch{return res.status(400).json({error:'Origen inválido'})}
  const r=await db.query('SELECT id,title,url,username FROM accesses WHERE employee_id=$1',[req.extensionUser.id]);
- res.set('Cache-Control','no-store').json(r.rows.filter(a=>{try{const u=new URL(a.url);return u.protocol==='https:'&&(u.origin===origin.origin||(String(a.title||'').trim().toUpperCase()==='CRM VENTURY'&&u.origin==='https://adfs365.stg-tradingcrm.com'&&origin.origin==='https://venturyfx.tradingcrm.com'))}catch{return false}}));
+ res.set('Cache-Control','no-store').json(r.rows.filter(a=>{try{const u=new URL(a.url);return u.protocol==='https:'&&allowedAccessOrigin(a,origin.origin)}catch{return false}}));
 }));
 app.post('/api/extension/fill',extensionAuth,run(async(req,res)=>{
  const id=String(req.body?.id||'');
@@ -92,9 +100,8 @@ app.post('/api/extension/fill',extensionAuth,run(async(req,res)=>{
  if(!/^[0-9]+$/.test(id))return res.status(400).json({error:'Acceso inválido'});
  const r=await db.query('SELECT title,url,username,secret FROM accesses WHERE id=$1 AND employee_id=$2',[id,req.extensionUser.id]);
  if(!r.rowCount)return res.status(403).json({error:'Acceso no autorizado para este sitio'});
- const access=r.rows[0],savedOrigin=new URL(access.url).origin;
- const venturyAlias=String(access.title||'').trim().toUpperCase()==='CRM VENTURY'&&savedOrigin==='https://adfs365.stg-tradingcrm.com'&&origin.origin==='https://venturyfx.tradingcrm.com';
- if(savedOrigin!==origin.origin&&!venturyAlias)return res.status(403).json({error:'Acceso no autorizado para este sitio'});
+ const access=r.rows[0];
+ if(!allowedAccessOrigin(access,origin.origin))return res.status(403).json({error:'Acceso no autorizado para este sitio'});
  res.set('Cache-Control','no-store').json({username:r.rows[0].username,password:dec(r.rows[0].secret)});
 }));
 app.post('/api/extension/revoke',extensionAuth,run(async(req,res)=>{
