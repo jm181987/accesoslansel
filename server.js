@@ -91,7 +91,7 @@ function allowedAccessOrigin(access,origin){
  let saved;try{const u=new URL(access.url);if(u.protocol!=='https:')return false;saved=u.origin}catch{return false}
  if(saved===origin)return true;
  const kind=crmKind(access.title);
- const allowed=kind==='ventury'?['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com']:kind==='mercados'?['https://mercadosinvest.tradingcrm.com']:null;
+ const allowed=kind==='ventury'?['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com']:kind==='mercados'?['https://mercadosinvest.tradingcrm.com','https://adfs365.stg-tradingcrm.com']:null;
  return !!allowed&&allowed.includes(saved)&&allowed.includes(origin);
 }
 app.get('/api/extension/accesses',extensionAuth,run(async(req,res)=>{
