@@ -20,6 +20,14 @@ $('#adminPairGenerate').onclick=async()=>{
   msg('Código generado para '+r.user.name);
  }catch(e){msg(e.message)}finally{button.disabled=false}
 };
+$('#adminPairRevoke').onclick=async()=>{
+ const id=$('#adminPairUser').value;
+ if(!id){msg('Seleccioná un funcionario');return}
+ const name=$('#adminPairUser').selectedOptions[0]?.textContent||'el funcionario';
+ if(!confirm('¿Revocar las vinculaciones de '+name+'? La extensión dejará de funcionar y necesitará un nuevo código.'))return;
+ const button=$('#adminPairRevoke');button.disabled=true;
+ try{await post('/api/admin/users/'+encodeURIComponent(id)+'/extension/revoke',{});$('#adminPairResult').classList.add('hidden');$('#adminPairCode').textContent='';msg('Vinculación revocada. Generá un código nuevo si necesitás volver a vincular.')}catch(e){msg(e.message)}finally{button.disabled=false}
+};
 $('#adminPairCopy').onclick=()=>navigator.clipboard.writeText($('#adminPairCode').textContent).then(()=>msg('Código copiado')).catch(()=>msg('Seleccioná y copiá el código manualmente'));
 async function managedAccesses(selectedId){
  const items=await api('/api/admin/accesses'),root=$('#managedAccesses');
