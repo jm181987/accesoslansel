@@ -67,9 +67,9 @@ app.post('/api/extension/exchange',run(async(req,res)=>{
   const u=await client.query('SELECT id FROM employees WHERE id=$1 AND active=true',[r.rows[0].user_id]);
   if(!u.rowCount){await client.query('ROLLBACK');return res.status(403).json({error:'Usuario inactivo'})}
   const token=crypto.randomBytes(32).toString('hex');
-  await client.query("INSERT INTO extension_tokens(token,user_id,expires) VALUES($1,$2,now()+interval '12 hours')",[h(token),u.rows[0].id]);
+  await client.query("INSERT INTO extension_tokens(token,user_id,expires) VALUES($1,$2,now()+interval '30 days')",[h(token),u.rows[0].id]);
   await client.query('COMMIT');
-  res.set('Cache-Control','no-store').json({token,expiresInSeconds:43200});
+  res.set('Cache-Control','no-store').json({token,expiresInSeconds:2592000});
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }));
 app.get('/api/extension/me',extensionAuth,run(async(req,res)=>{
