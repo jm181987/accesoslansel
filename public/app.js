@@ -97,8 +97,8 @@ const platformUrls={
  'CRM MERCADOS':'https://mercadosinvest.tradingcrm.com/',
  'CRM VENTURY':'https://venturyfx.tradingcrm.com/',
  'SHARKWPP':'https://sharkwpp.linetechlabs.com/',
- 'VOISO':'https://cc-dal01.voiso.com/',
- 'VOICESPIN':'',
+ 'VOISO':'https://cc-dal01.voiso.com/users/sign_in',
+ 'VOICESPIN':'https://work-and-media.pbx.voicespin.com/panel/',
  'CLOUD':'https://cloud.clickwa.tech/',
  'FEROZO':'https://ferozo.email/',
  'COMIDAS LANSEL':'https://comidalansel.vercel.app/'
