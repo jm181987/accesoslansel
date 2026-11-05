@@ -38,6 +38,15 @@ app.post('/api/extension/pair',auth,run(async(req,res)=>{
  await db.query("INSERT INTO extension_pair_codes(code,user_id,expires) VALUES($1,$2,now()+interval '5 minutes')",[h(code),req.user.id]);
  res.set('Cache-Control','no-store').json({code,expiresInSeconds:300});
 }));
+app.post('/api/admin/users/:id/extension/pair',auth,admin,run(async(req,res)=>{
+ const id=String(req.params.id);
+ if(!/^[0-9]+$/.test(id))return res.status(400).json({error:'Funcionario inválido'});
+ const user=await db.query('SELECT id,name,email FROM employees WHERE id=$1 AND active=true',[id]);
+ if(!user.rowCount)return res.status(404).json({error:'Funcionario inexistente o inactivo'});
+ const code=crypto.randomBytes(24).toString('hex');
+ await db.query("INSERT INTO extension_pair_codes(code,user_id,expires) VALUES($1,$2,now()+interval '5 minutes')",[h(code),user.rows[0].id]);
+ res.set('Cache-Control','no-store').json({code,expiresInSeconds:300,user:user.rows[0]});
+}));
 app.post('/api/extension/exchange',run(async(req,res)=>{
  const code=String(req.body?.code||'').trim().toLowerCase();
  if(!/^[a-f0-9]{48}$/.test(code))return res.status(400).json({error:'Código inválido'});
