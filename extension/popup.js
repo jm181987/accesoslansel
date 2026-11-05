@@ -14,7 +14,11 @@ const API='https://accesoslansel.vercel.app';const $=id=>document.getElementById
    const row=document.createElement('div');row.className='platform-row';
    const title=document.createElement('strong');title.textContent=item.title;
    const open=document.createElement('button');open.type='button';open.textContent='Abrir '+item.title;
-   open.onclick=()=>chrome.tabs.create({url:item.url});
+   open.onclick=()=>{
+    const title=String(item.title||'').trim().toUpperCase();
+    const url=title==='CRM VENTURY'?'https://venturyfx.tradingcrm.com/':title==='CRM MERCADOS'?'https://mercadosinvest.tradingcrm.com/':item.url;
+    chrome.tabs.create({url});
+   };
    row.append(title,open);
    if(origin&&new URL(item.url).origin===origin){
     const fillButton=document.createElement('button');fillButton.type='button';fillButton.textContent='Completar credenciales';
