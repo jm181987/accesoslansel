@@ -29,8 +29,9 @@ $('#adminPairRevoke').onclick=async()=>{
  try{await post('/api/admin/users/'+encodeURIComponent(id)+'/extension/revoke',{});$('#adminPairResult').classList.add('hidden');$('#adminPairCode').textContent='';msg('Vinculación revocada. Generá un código nuevo si necesitás volver a vincular.')}catch(e){msg(e.message)}finally{button.disabled=false}
 };
 $('#adminPairCopy').onclick=()=>navigator.clipboard.writeText($('#adminPairCode').textContent).then(()=>msg('Código copiado')).catch(()=>msg('Seleccioná y copiá el código manualmente'));
-async function managedAccesses(selectedId){
+async function managedAccesses(selectedId, preferredEmployeeId){
  const items=await api('/api/admin/accesses'),root=$('#managedAccesses');
+ const previousEmployeeId=preferredEmployeeId||root.querySelector('select')?.value||'';
  root.replaceChildren();
  if(!items.length){root.append(node('p','Todavía no hay accesos asignados.'));return}
  const filterLabel=document.createElement('label');filterLabel.textContent='Seleccionar funcionario';
@@ -107,6 +108,7 @@ async function managedAccesses(selectedId){
  accessSelect.addEventListener('change',renderEditor);
  const selected=items.find(a=>String(a.id)===String(selectedId));
  if(selected){employeeSelect.value=String(selected.employee_id);updatePlatforms(String(selected.id))}
+ else if(previousEmployeeId&&employees.some(u=>u.id===String(previousEmployeeId))){employeeSelect.value=String(previousEmployeeId);updatePlatforms('')}
 }
 $('#loginForm').onsubmit=async e=>{e.preventDefault();try{await post('/api/login',Object.fromEntries(new FormData(e.target)));e.target.reset();msg('');await load()}catch(err){msg(err.message)}};
 $('#pairExtension').onclick=async()=>{try{const r=await post('/api/extension/pair',{});$('#pairCode').textContent=r.code;$('#pairResult').classList.remove('hidden');msg('Código generado. Vence en 5 minutos.')}catch(e){msg(e.message)}};
@@ -133,5 +135,5 @@ $('#platformPreset').addEventListener('change',e=>{
  $('#newAccess').elements.url.value=platformUrls[name]||'';syncVoiceSpinLabels();
 });
 $('#newAccessPasswordEye').onclick=()=>{const el=$('#newAccessPassword');const show=el.type==='password';el.type=show?'text':'password';$('#newAccessPasswordEye').textContent=show?'Ocultar':'👁 Mostrar'};
-$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);e.target.reset();syncVoiceSpinLabels();msg('Acceso asignado');await managedAccesses()}catch(err){msg(err.message)}};
+$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);const selectedEmployee=d.userId;e.target.reset();$('#userId').value=selectedEmployee;$('#newAccessPassword').type='password';$('#newAccessPasswordEye').textContent='👁 Mostrar';syncVoiceSpinLabels();msg('Acceso asignado. Funcionario seleccionado conservado.');await managedAccesses(undefined,selectedEmployee)}catch(err){msg(err.message)}};
 load();
