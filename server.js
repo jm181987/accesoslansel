@@ -122,6 +122,13 @@ app.get('/api/admin/accesses',auth,admin,run(async(req,res)=>{
  const result=await db.query('SELECT a.id,a.employee_id,a.title,a.url,a.username,e.name AS employee_name,e.email AS employee_email FROM accesses a JOIN employees e ON e.id=a.employee_id ORDER BY e.name,a.title');
  res.set('Cache-Control','no-store').json(result.rows);
 }));
+app.get('/api/admin/accesses/:id/password',auth,admin,run(async(req,res)=>{
+ const id=String(req.params.id);
+ if(!/^\d+$/.test(id))return res.status(400).json({error:'Identificador inválido'});
+ const r=await db.query('SELECT secret FROM accesses WHERE id=$1',[id]);
+ if(!r.rowCount)return res.status(404).json({error:'Acceso no encontrado'});
+ res.set('Cache-Control','no-store').json({password:dec(r.rows[0].secret)});
+}));
 app.patch('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
  const id=String(req.params.id);
  if(!/^\d+$/.test(id))return res.status(400).json({error:'Identificador inválido'});
