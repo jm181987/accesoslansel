@@ -131,4 +131,39 @@ $('#platformPreset').addEventListener('change',e=>{
  $('#newAccess').elements.url.value=platformUrls[name]||'';
 });
 $('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);e.target.reset();msg('Acceso asignado');await managedAccesses()}catch(err){msg(err.message)}};
+const mercadosImportRows=[
+ ['alison.fi@mercadosinvest.com','alison.fisher.rtn@tradingcrm.com'],
+ ['antonio.mo@mercadosinvest.com','Luciano.Montes.RTN@tradingcrm.com'],
+ ['fabricio.si@mercadosinvest.com','Fabricio.Silva.RTN@tradingcrm.com'],
+ ['fatima.es@mercadosinvest.com','fatima.escalona@tradingcrm.com'],
+ ['felipe.ma@mercadosinvest.com','felipe.machado.sls@tradingcrm.com'],
+ ['ignacio.cas@mercadosinvest.com','Ignacio.Castro.RTN@tradingcrm.com'],
+ ['ingrid.ben@mercadosinvest.com','ingrid.benitez.rtn@tradingcrm.com'],
+ ['joaquin.ma@mercadosinvest.com','joaquin.martinez.rtn@tradingcrm.com'],
+ ['jorge.ro@mercadosinvest.com','jorge.rodriguez.rtn@tradingcrm.com'],
+ ['maite.sa@mercadosinvest.com','maite.santos.rpo@tradingcrm.com'],
+ ['marco.so@mercadosinvest.com','Marco.Souza.RTN@tradingcrm.com'],
+ ['maria.bat@mercadosinvest.com','maria.batista.rtn@tradingcrm.com'],
+ ['maria.pe@mercadosinvest.com','maria.pereira.rtn@tradingcrm.com'],
+ ['nataly.te@mercadosinvest.com','Nataly.Tessali.sls@tradingcrm.com'],
+ ['ricardo.ol@mercadosinvest.com','Ricardo.Oliveira.RTN@tradingcrm.com']
+];
+$('#bulkMercadosRows').value=mercadosImportRows.map(x=>x.join(';')).join('\n');
+$('#bulkMercados').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const button=$('#bulkMercadosSubmit'),feedback=$('#bulkMercadosResult');
+ const lines=$('#bulkMercadosRows').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ const rows=[];
+ for(const line of lines){const parts=line.split(';').map(x=>x.trim());if(parts.length!==2||!parts[0]||!parts[1]){feedback.textContent='Formato inválido. Usá correo;usuario CRM en cada línea.';return}rows.push({employeeEmail:parts[0],username:parts[1]})}
+ if(!rows.length){feedback.textContent='No hay asignaciones';return}
+ if(!confirm('¿Importar '+rows.length+' accesos de CRM MERCADOS? Los existentes no se modificarán.'))return;
+ button.disabled=true;feedback.textContent='Importando...';
+ try{
+  const result=await post('/api/admin/accesses/bulk',{rows,password:$('#bulkMercadosPassword').value});
+  $('#bulkMercadosPassword').value='';
+  feedback.textContent='Importados: '+result.inserted+' · Ya existentes: '+result.skipped;
+  await managedAccesses();await accesses();
+ }catch(err){feedback.textContent='Error: '+err.message+(err.message.includes('Funcionarios inexistentes')?' (verificá que los 15 funcionarios estén creados y activos)':'')}
+ finally{button.disabled=false}
+});
 load();
