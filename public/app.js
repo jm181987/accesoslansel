@@ -125,10 +125,12 @@ const platformUrls={
  'FEROZO':'https://ferozo.email/',
  'COMIDAS LANSEL':'https://comidalansel.vercel.app/'
 };
+function syncVoiceSpinLabels(){const isVoiceSpin=$('#platformTitle').value.trim().toUpperCase()==='VOICESPIN';$('#newAccessUsernameLabel').firstChild.textContent=isVoiceSpin?'Agente / Extensión':'Usuario';$('#newAccessPasswordLabel').firstChild.textContent=isVoiceSpin?'Extension Secret':'Contraseña';if(isVoiceSpin){$('#newAccessUsername').placeholder='Ej.: 2797';$('#newAccessPassword').placeholder='Aa123456!';}else{$('#newAccessUsername').placeholder='';$('#newAccessPassword').placeholder='';}}
+$('#platformTitle').addEventListener('input',syncVoiceSpinLabels);
 $('#platformPreset').addEventListener('change',e=>{
  const name=e.target.value;
  $('#platformTitle').value=name;
- $('#newAccess').elements.url.value=platformUrls[name]||'';
+ $('#newAccess').elements.url.value=platformUrls[name]||'';syncVoiceSpinLabels();
 });
-$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);e.target.reset();msg('Acceso asignado');await managedAccesses()}catch(err){msg(err.message)}};
+$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);e.target.reset();syncVoiceSpinLabels();msg('Acceso asignado');await managedAccesses()}catch(err){msg(err.message)}};
 load();
