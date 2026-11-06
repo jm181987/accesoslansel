@@ -60,42 +60,40 @@ async function fill(id){
     };
     if(isVoiceSpin){
      const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-     const editable=()=>[...document.querySelectorAll('input')].filter(el=>visible(el)&&!['hidden','submit','button','checkbox','radio','file'].includes(el.type));
-     const fieldFor=label=>{
-      const words=[...document.querySelectorAll('label,[class*="label"],[class*="Label"]')];
-      for(const node of words){
-       const name=(node.textContent||'').trim().replace(/\\s+/g,' ').toLowerCase();
-       if(!name.startsWith(label))continue;
-       const control=node.querySelector('input')||(node.getAttribute('for')&&document.getElementById(node.getAttribute('for')));
-       if(control&&visible(control))return control;
-      }
-      const matches=editable().filter(el=>[el.getAttribute('placeholder'),el.getAttribute('aria-label'),el.name,el.id].some(v=>String(v||'').toLowerCase().includes(label)));
-      return matches[0]||null;
+     const activeFields=()=>[...document.querySelectorAll('input')].filter(el=>visible(el)&&!['hidden','submit','button','checkbox','radio','file'].includes(el.type));
+     const labelText=el=>{
+      const linked=el.labels?[...el.labels].map(n=>n.textContent||'').join(' '):'';
+      const attrs=[el.getAttribute('aria-label'),el.getAttribute('placeholder'),el.name,el.id].filter(Boolean).join(' ');
+      const parent=el.closest('label,[class*="field"],[class*="Field"],[class*="form-group"],[class*="FormGroup"]');
+      return (linked+' '+attrs+' '+(parent?.textContent||'')).toLowerCase().replace(/\\s+/g,' ');
      };
-     // VoiceSpin renders controlled fields; changing Agent may reset Extension.
-     // Re-query after each input event and verify the final values.
-     for(let attempt=0;attempt<3;attempt++){
-      const fields=editable();
-      const agent=fieldFor('agent')||fields[0];
-      const extension=fieldFor('extension')||fields.find(el=>el!==agent&&el.type!=='password');
-      const secret=fieldFor('extension secret')||fields.find(el=>el.type==='password');
-      if(!agent||!extension||!secret||agent===extension||extension===secret)return 'fields';
+     const locate=()=>{
+      const fields=activeFields();
+      const passwordField=fields.find(el=>el.type==='password')||fields.find(el=>/secret/.test(labelText(el)));
+      const textFields=fields.filter(el=>el!==passwordField&&el.type!=='password');
+      const agent=textFields.find(el=>/\\bagent\\b/.test(labelText(el)))||textFields[0];
+      // Never select the Extension secret field as the Extension number.
+      const extension=textFields.find(el=>el!==agent&&/\\bextension\\b/.test(labelText(el)))||textFields.find(el=>el!==agent);
+      return {agent,extension,passwordField};
+     };
+     for(let attempt=0;attempt<4;attempt++){
+      let {agent,extension,passwordField}=locate();
+      if(!agent||!extension||!passwordField)return 'fields';
       set(agent,username);
-      await wait(120);
-      const fresh=editable();
-      const ext=fieldFor('extension')||fresh.find(el=>el!==agent&&el.type!=='password');
-      if(!ext)return 'fields';
-      set(ext,username);
-      await wait(120);
-      const pwd=fieldFor('extension secret')||editable().find(el=>el.type==='password');
-      if(!pwd)return 'fields';
-      set(pwd,password);
-      await wait(180);
-      const finalFields=editable();
-      const checkAgent=fieldFor('agent')||finalFields[0];
-      const checkExt=fieldFor('extension')||finalFields.find(el=>el!==checkAgent&&el.type!=='password');
-      const checkPwd=fieldFor('extension secret')||finalFields.find(el=>el.type==='password');
-      if(checkAgent?.value===String(username)&&checkExt?.value===String(username)&&checkPwd?.value===String(password))return 'ok';
+      await wait(250);
+      ({agent,extension,passwordField}=locate());
+      if(!extension)return 'fields';
+      set(extension,username);
+      // Some controlled inputs require keyboard-like events to commit the value.
+      extension.dispatchEvent(new KeyboardEvent('keyup',{key:String(username).slice(-1),bubbles:true}));
+      extension.dispatchEvent(new Event('blur',{bubbles:true}));
+      await wait(250);
+      ({agent,extension,passwordField}=locate());
+      if(!passwordField||!extension)return 'fields';
+      set(passwordField,password);
+      await wait(350);
+      ({agent,extension,passwordField}=locate());
+      if(agent?.value===String(username)&&extension?.value===String(username)&&passwordField?.value===String(password))return 'ok';
      }
      return 'fields';
     }
