@@ -1,4 +1,5 @@
-const API='https://accesoslansel.vercel.app';const $=id=>document.getElementById(id);const say=t=>$('status').textContent=t;async function request(path,token,body){const r=await fetch(API+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok)throw Error(d.error||'Error');return d}async function current(){const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab||!tab.url)throw Error('Abrí una plataforma');const u=new URL(tab.url);if(u.protocol!=='https:')throw Error('Solo sitios HTTPS');return {tab,origin:u.origin,host:u.hostname}}function crmKind(title){const t=String(title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();return t.includes('VENTURY')?'ventury':t.includes('MERCADOS')?'mercados':null}
+const API='https://accesoslansel.vercel.app';
+document.getElementById('extensionVersion').textContent='LANSEL Access · v'+chrome.runtime.getManifest().version;const $=id=>document.getElementById(id);const say=t=>$('status').textContent=t;async function request(path,token,body){const r=await fetch(API+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok)throw Error(d.error||'Error');return d}async function current(){const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab||!tab.url)throw Error('Abrí una plataforma');const u=new URL(tab.url);if(u.protocol!=='https:')throw Error('Solo sitios HTTPS');return {tab,origin:u.origin,host:u.hostname}}function crmKind(title){const t=String(title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();return t.includes('VENTURY')?'ventury':t.includes('MERCADOS')?'mercados':null}
 function permittedOrigin(item,origin){try{const saved=new URL(item.url).origin;if(saved===origin)return true;const k=crmKind(item.title);return k==='ventury'?['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(saved)&&['https://adfs365.stg-tradingcrm.com','https://venturyfx.tradingcrm.com'].includes(origin):k==='mercados'?['https://mercadosinvest.tradingcrm.com','https://adfs365.stg-tradingcrm.com'].includes(saved)&&['https://mercadosinvest.tradingcrm.com','https://adfs365.stg-tradingcrm.com'].includes(origin):false}catch{return false}}
 async function load(){
  const {token}=await chrome.storage.local.get('token');
@@ -43,7 +44,7 @@ async function fill(id){
   const item=platforms.find(a=>String(a.id)===String(id));
   if(!item)throw Error('Acceso no asignado');
   const c=await request('/api/extension/fill',token,{id,origin});
-  const voiceSpin=/\\bVOICE\\s*SPIN\\b|\\bVOICESPIN\\b/i.test(String(item.title||''));
+  const voiceSpin=/VOICESPIN|VOICE\s*SPIN/i.test(String(item.title||''));
   const results=await chrome.scripting.executeScript({
    target:{tabId:tab.id},
    func:async(username,password,expectedOrigin,isVoiceSpin)=>{
@@ -66,11 +67,11 @@ async function fill(id){
       const passwordField=fields.find(el=>el.type==='password');
       const textFields=fields.filter(el=>el.type!=='password'&&el.type!=='email');
       const byName=(el,term)=>[el.name,el.id,el.getAttribute('aria-label'),el.getAttribute('placeholder'),...(el.labels?[...el.labels].map(n=>n.textContent):[])].some(v=>new RegExp('(^|[^a-z])'+term+'([^a-z]|$)','i').test(String(v||'')));
-      const agent=textFields.find(el=>byName(el,'agent'))||textFields.find(el=>/^\\d{4}$/.test(el.value))||textFields[0];
+      const agent=textFields.find(el=>byName(el,'agent'))||textFields.find(el=>/^\d{4}$/.test(el.value))||textFields[0];
       let extension=textFields.find(el=>el!==agent&&byName(el,'extension')&&!byName(el,'secret'));
       if(!extension){
        // Find the input geometrically closest to the exact visible "Extension *" label.
-       const labels=[...document.querySelectorAll('label,span,div,p')].filter(el=>el.children.length===0&&/^extension\\s*\\*?$/i.test((el.textContent||'').trim())&&el.getClientRects().length);
+       const labels=[...document.querySelectorAll('label,span,div,p')].filter(el=>el.children.length===0&&/^extension\s*\*?$/i.test((el.textContent||'').trim())&&el.getClientRects().length);
        for(const label of labels){
         const rect=label.getBoundingClientRect();
         const candidates=textFields.filter(el=>el!==agent).map(el=>{
