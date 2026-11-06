@@ -57,7 +57,7 @@ async function managedAccesses(selectedId){
   }
   const passwordLabel=document.createElement('label');passwordLabel.textContent='Nueva contraseña (opcional)';
   const passwordInput=document.createElement('input');passwordInput.name='password';passwordInput.type='password';passwordInput.autocomplete='new-password';passwordInput.placeholder='Dejar vacío para conservar la actual';
-  passwordLabel.append(passwordInput);form.append(passwordLabel);
+  passwordLabel.append(passwordInput);const eye=node('button','👁 Mostrar');eye.type='button';eye.className='secondary';eye.onclick=()=>{const show=passwordInput.type==='password';passwordInput.type=show?'text':'password';eye.textContent=show?'Ocultar':'👁 Mostrar'};passwordLabel.append(eye);form.append(passwordLabel);
   const actions=document.createElement('div');actions.className='managed-actions';
   const save=node('button','Guardar cambios');save.type='submit';
   const feedback=node('span','');feedback.className='muted';feedback.setAttribute('role','status');
@@ -132,5 +132,6 @@ $('#platformPreset').addEventListener('change',e=>{
  $('#platformTitle').value=name;
  $('#newAccess').elements.url.value=platformUrls[name]||'';syncVoiceSpinLabels();
 });
+$('#newAccessPasswordEye').onclick=()=>{const el=$('#newAccessPassword');const show=el.type==='password';el.type=show?'text':'password';$('#newAccessPasswordEye').textContent=show?'Ocultar':'👁 Mostrar'};
 $('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);e.target.reset();syncVoiceSpinLabels();msg('Acceso asignado');await managedAccesses()}catch(err){msg(err.message)}};
 load();
