@@ -46,7 +46,7 @@ async function fill(id){
   const voiceSpin=/\\bVOICE\\s*SPIN\\b|\\bVOICESPIN\\b/i.test(String(item.title||''));
   const results=await chrome.scripting.executeScript({
    target:{tabId:tab.id},
-   func:(username,password,expectedOrigin,isVoiceSpin)=>{
+   func:async(username,password,expectedOrigin,isVoiceSpin)=>{
     if(location.origin!==expectedOrigin)return 'origin';
     const visible=el=>el.getClientRects().length>0&&!el.disabled&&!el.readOnly;
     const inputs=[...document.querySelectorAll('input')].filter(visible);
@@ -59,12 +59,45 @@ async function fill(id){
      return true;
     };
     if(isVoiceSpin){
-     const fields=inputs.filter(el=>!['hidden','submit','button','checkbox','radio','file'].includes(el.type));
-     if(fields.length<3)return 'fields';
-     const firstThree=fields.slice(0,3);
-     if(!firstThree.every(el=>['text','email','tel','number','password',''].includes(el.type)))return 'fields';
-     for(const [el,value] of [[firstThree[0],username],[firstThree[1],username],[firstThree[2],password]])set(el,value);
-     return 'ok';
+     const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+     const editable=()=>[...document.querySelectorAll('input')].filter(el=>visible(el)&&!['hidden','submit','button','checkbox','radio','file'].includes(el.type));
+     const fieldFor=label=>{
+      const words=[...document.querySelectorAll('label,[class*="label"],[class*="Label"]')];
+      for(const node of words){
+       const name=(node.textContent||'').trim().replace(/\\s+/g,' ').toLowerCase();
+       if(!name.startsWith(label))continue;
+       const control=node.querySelector('input')||(node.getAttribute('for')&&document.getElementById(node.getAttribute('for')));
+       if(control&&visible(control))return control;
+      }
+      const matches=editable().filter(el=>[el.getAttribute('placeholder'),el.getAttribute('aria-label'),el.name,el.id].some(v=>String(v||'').toLowerCase().includes(label)));
+      return matches[0]||null;
+     };
+     // VoiceSpin renders controlled fields; changing Agent may reset Extension.
+     // Re-query after each input event and verify the final values.
+     for(let attempt=0;attempt<3;attempt++){
+      const fields=editable();
+      const agent=fieldFor('agent')||fields[0];
+      const extension=fieldFor('extension')||fields.find(el=>el!==agent&&el.type!=='password');
+      const secret=fieldFor('extension secret')||fields.find(el=>el.type==='password');
+      if(!agent||!extension||!secret||agent===extension||extension===secret)return 'fields';
+      set(agent,username);
+      await wait(120);
+      const fresh=editable();
+      const ext=fieldFor('extension')||fresh.find(el=>el!==agent&&el.type!=='password');
+      if(!ext)return 'fields';
+      set(ext,username);
+      await wait(120);
+      const pwd=fieldFor('extension secret')||editable().find(el=>el.type==='password');
+      if(!pwd)return 'fields';
+      set(pwd,password);
+      await wait(180);
+      const finalFields=editable();
+      const checkAgent=fieldFor('agent')||finalFields[0];
+      const checkExt=fieldFor('extension')||finalFields.find(el=>el!==checkAgent&&el.type!=='password');
+      const checkPwd=fieldFor('extension secret')||finalFields.find(el=>el.type==='password');
+      if(checkAgent?.value===String(username)&&checkExt?.value===String(username)&&checkPwd?.value===String(password))return 'ok';
+     }
+     return 'fields';
     }
     const p=inputs.find(e=>e.type==='password');
     if(!p)return 'fields';
