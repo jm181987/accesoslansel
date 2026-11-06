@@ -35,4 +35,48 @@ async function load(){
   }else say(e.message);
  }
 }
-async function fill(id){try{const {token}=await chrome.storage.local.get('token');const {tab,origin}=await current();const c=await request('/api/extension/fill',token,{id,origin});const results=await chrome.scripting.executeScript({target:{tabId:tab.id},func:(username,password,origin)=>{if(location.origin!==origin)return false;const p=[...document.querySelectorAll('input[type=password]')].find(e=>e.getClientRects().length);if(!p)return false;const root=p.form||document;const u=[...root.querySelectorAll('input')].find(e=>e!==p&&['text','email','tel',''].includes(e.type)&&e.getClientRects().length)||[...document.querySelectorAll('input')].find(e=>e!==p&&['text','email','tel',''].includes(e.type)&&e.getClientRects().length);if(!u)return false;for(const [el,value] of [[u,username],[p,password]]){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))}return true},args:[c.username,c.password,origin]});say(results[0]?.result?'Campos completados; iniciá sesión manualmente':'No se encontraron campos compatibles')}catch(e){say(e.message)}}$('connect').onclick=async()=>{try{const {token:existing}=await chrome.storage.local.get('token');if(existing)throw Error('Ya existe una vinculación. Solicitá al administrador que la revoque.');const code=$('code').value.trim();const d=await request('/api/extension/exchange',null,{code});await chrome.storage.local.set({token:d.token});$('code').value='';await load()}catch(e){say(e.message)}};load();
+async function fill(id){
+ try{
+  const {token}=await chrome.storage.local.get('token');
+  const {tab,origin}=await current();
+  const platforms=await request('/api/extension/platforms',token);
+  const item=platforms.find(a=>String(a.id)===String(id));
+  if(!item)throw Error('Acceso no asignado');
+  const c=await request('/api/extension/fill',token,{id,origin});
+  const voiceSpin=/\\bVOICE\\s*SPIN\\b|\\bVOICESPIN\\b/i.test(String(item.title||''));
+  const results=await chrome.scripting.executeScript({
+   target:{tabId:tab.id},
+   func:(username,password,expectedOrigin,isVoiceSpin)=>{
+    if(location.origin!==expectedOrigin)return 'origin';
+    const visible=el=>el.getClientRects().length>0&&!el.disabled&&!el.readOnly;
+    const inputs=[...document.querySelectorAll('input')].filter(visible);
+    const set=(el,value)=>{
+     const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;
+     if(!setter)return false;
+     setter.call(el,String(value));
+     el.dispatchEvent(new Event('input',{bubbles:true}));
+     el.dispatchEvent(new Event('change',{bubbles:true}));
+     return true;
+    };
+    if(isVoiceSpin){
+     const fields=inputs.filter(el=>!['hidden','submit','button','checkbox','radio','file'].includes(el.type));
+     if(fields.length<3)return 'fields';
+     const firstThree=fields.slice(0,3);
+     if(!firstThree.every(el=>['text','email','tel','number','password',''].includes(el.type)))return 'fields';
+     for(const [el,value] of [[firstThree[0],username],[firstThree[1],username],[firstThree[2],password]])set(el,value);
+     return 'ok';
+    }
+    const p=inputs.find(e=>e.type==='password');
+    if(!p)return 'fields';
+    const root=p.form||document;
+    const u=[...root.querySelectorAll('input')].find(e=>e!==p&&['text','email','tel',''].includes(e.type)&&visible(e))||inputs.find(e=>e!==p&&['text','email','tel',''].includes(e.type));
+    if(!u)return 'fields';
+    set(u,username);set(p,password);return 'ok';
+   },
+   args:[c.username,c.password,origin,voiceSpin]
+  });
+  const result=results[0]?.result;
+  say(result==='ok'?'Campos completados; iniciá sesión manualmente':result==='fields'?'No se encontraron los campos de inicio de sesión esperados':'No se pudo completar el formulario en este dominio');
+ }catch(e){say(e.message)}
+}
+$('connect').onclick=async()=>{try{const {token:existing}=await chrome.storage.local.get('token');if(existing)throw Error('Ya existe una vinculación. Solicitá al administrador que la revoque.');const code=$('code').value.trim();const d=await request('/api/extension/exchange',null,{code});await chrome.storage.local.set({token:d.token});$('code').value='';await load()}catch(e){say(e.message)}};load();
