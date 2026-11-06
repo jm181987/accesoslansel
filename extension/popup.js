@@ -60,20 +60,27 @@ async function fill(id){
     };
     if(isVoiceSpin){
      const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-     const activeFields=()=>[...document.querySelectorAll('input')].filter(el=>visible(el)&&!['hidden','submit','button','checkbox','radio','file'].includes(el.type));
-     const labelText=el=>{
-      const linked=el.labels?[...el.labels].map(n=>n.textContent||'').join(' '):'';
-      const attrs=[el.getAttribute('aria-label'),el.getAttribute('placeholder'),el.name,el.id].filter(Boolean).join(' ');
-      const parent=el.closest('label,[class*="field"],[class*="Field"],[class*="form-group"],[class*="FormGroup"]');
-      return (linked+' '+attrs+' '+(parent?.textContent||'')).toLowerCase().replace(/\\s+/g,' ');
-     };
+     const activeFields=()=>[...document.querySelectorAll('input')].filter(el=>visible(el)&&!['hidden','submit','button','checkbox','radio','file','search'].includes(el.type)&&el.getAttribute('role')!=='combobox');
      const locate=()=>{
       const fields=activeFields();
-      const passwordField=fields.find(el=>el.type==='password')||fields.find(el=>/secret/.test(labelText(el)));
-      const textFields=fields.filter(el=>el!==passwordField&&el.type!=='password');
-      const agent=textFields.find(el=>/\\bagent\\b/.test(labelText(el)))||textFields[0];
-      // Never select the Extension secret field as the Extension number.
-      const extension=textFields.find(el=>el!==agent&&/\\bextension\\b/.test(labelText(el)))||textFields.find(el=>el!==agent);
+      const passwordField=fields.find(el=>el.type==='password');
+      const textFields=fields.filter(el=>el.type!=='password'&&el.type!=='email');
+      const byName=(el,term)=>[el.name,el.id,el.getAttribute('aria-label'),el.getAttribute('placeholder'),...(el.labels?[...el.labels].map(n=>n.textContent):[])].some(v=>new RegExp('(^|[^a-z])'+term+'([^a-z]|$)','i').test(String(v||'')));
+      const agent=textFields.find(el=>byName(el,'agent'))||textFields.find(el=>/^\\d{4}$/.test(el.value))||textFields[0];
+      let extension=textFields.find(el=>el!==agent&&byName(el,'extension')&&!byName(el,'secret'));
+      if(!extension){
+       // Find the input geometrically closest to the exact visible "Extension *" label.
+       const labels=[...document.querySelectorAll('label,span,div,p')].filter(el=>el.children.length===0&&/^extension\\s*\\*?$/i.test((el.textContent||'').trim())&&el.getClientRects().length);
+       for(const label of labels){
+        const rect=label.getBoundingClientRect();
+        const candidates=textFields.filter(el=>el!==agent).map(el=>{
+         const r=el.getBoundingClientRect();
+         return {el,score:Math.abs(r.top-rect.bottom)+Math.abs(r.left-rect.left)*0.25};
+        }).filter(x=>x.el.getBoundingClientRect().top>=rect.top-8).sort((x,y)=>x.score-y.score);
+        if(candidates[0]&&candidates[0].score<110){extension=candidates[0].el;break}
+       }
+      }
+      // Never fall back to an arbitrary input: it may be a country selector (e.g. Brasil).
       return {agent,extension,passwordField};
      };
      for(let attempt=0;attempt<4;attempt++){
