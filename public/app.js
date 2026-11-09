@@ -1,5 +1,19 @@
 
-const $=s=>document.querySelector(s),msg=s=>$('#message').textContent=s;
+const $=s=>document.querySelector(s);
+let toastTimer;
+function msg(message,type='info'){
+ const toast=$('#toast'),content=$('#toastText');
+ if(!toast||!content){$('#message').textContent=message;return}
+ clearTimeout(toastTimer);
+ const value=String(message||'').trim();
+ if(!value){toast.classList.remove('show');toast.hidden=true;return}
+ content.textContent=value;
+ toast.dataset.type=type==='error'||/^(error|no se pudo|credenciales incorrectas|este correo ya existe|vinculación vencida)/i.test(value)?'error':type==='success'||/^(✓|acceso asignado|funcionario creado|código generado|cambios guardados)/i.test(value)?'success':'info';
+ toast.hidden=false;
+ requestAnimationFrame(()=>toast.classList.add('show'));
+ toastTimer=setTimeout(()=>{toast.classList.remove('show');setTimeout(()=>{if(!toast.classList.contains('show'))toast.hidden=true},250)},6500);
+}
+$('#toastClose')?.addEventListener('click',()=>{clearTimeout(toastTimer);$('#toast').classList.remove('show');$('#toast').hidden=true});
 const api=async(u,o={})=>{const r=await fetch(u,{...o,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok){const err=new Error(d.error||'Error');err.status=r.status;err.details=d;throw err}return d};
 const post=(u,d)=>api(u,{method:'POST',body:JSON.stringify(d)});
 const node=(tag,text)=>{const e=document.createElement(tag);e.textContent=text;return e};
@@ -139,7 +153,7 @@ $('#loginForm').onsubmit=async e=>{e.preventDefault();try{await post('/api/login
 $('#pairExtension').onclick=async()=>{try{const r=await post('/api/extension/pair',{});$('#pairCode').textContent=r.code;$('#pairResult').classList.remove('hidden');msg('Código generado. Vence en 5 minutos.')}catch(e){msg(e.message)}};
 $('#copyPairCode').onclick=()=>navigator.clipboard.writeText($('#pairCode').textContent).then(()=>msg('Código copiado')).catch(()=>msg('Seleccioná y copiá el código manualmente'));
 $('#logout').onclick=async()=>{await post('/api/logout',{});location.reload()};
-$('#newUser').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{await post('/api/users',data);e.target.reset();msg('Funcionario creado');await users()}catch(err){if(err.status===409){showAdminTab('people');$('#userSearch').value=data.email.trim().toLowerCase();await users();const match=[...document.querySelectorAll('#users .user')].find(row=>row.dataset.email===data.email.trim().toLowerCase());if(match){match.scrollIntoView({behavior:'smooth',block:'center'});msg('Este correo ya está registrado. Encontré el funcionario existente y lo mostré en la lista.')}else{msg('El correo ya existe en la base de datos, pero no aparece en el listado. Verificá que estés usando la misma base de datos y consultá al administrador.')}}else msg(err.message)}};
+$('#newUser').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{await post('/api/users',data);e.target.reset();msg('Funcionario creado');await users()}catch(err){if(err.status===409){showAdminTab('people');$('#userSearch').value=data.email.trim().toLowerCase();await users();const match=[...document.querySelectorAll('#users .user')].find(row=>row.dataset.email===data.email.trim().toLowerCase());if(match){msg('Este correo ya está registrado. Encontré el funcionario existente y lo mostré en la lista.')}else{msg('El correo ya existe en la base de datos, pero no aparece en el listado. Verificá que estés usando la misma base de datos y consultá al administrador.')}}else msg(err.message)}};
 
 const platformUrls={
  'CRM MONETY':'https://crm.monetytrade.com/',
