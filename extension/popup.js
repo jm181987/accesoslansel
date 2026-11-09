@@ -9,7 +9,7 @@ async function load(){
  try{
   const account=await request('/api/extension/me',token);
   // Version reporting is optional: a telemetry failure must never log out a valid employee.
-  request('/api/extension/heartbeat',token,{version:chrome.runtime.getManifest().version}).catch(()=>{});
+  await request('/api/extension/heartbeat',token,{version:chrome.runtime.getManifest().version}).catch(err=>{console.warn('No se pudo registrar la versión de LANSEL Access:',err.message)});
   const platforms=await request('/api/extension/platforms',token);
   let origin=null;
   try{origin=(await current()).origin}catch{}
