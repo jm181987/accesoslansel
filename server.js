@@ -84,6 +84,11 @@ app.get('/api/admin/extensions',auth,admin,run(async(req,res)=>{
  res.set('Cache-Control','no-store').json(r.rows);
 }));
 app.get('/api/extension/me',extensionAuth,run(async(req,res)=>{
+ const reportedVersion=String(req.get('X-LANSEL-Extension-Version')||'');
+ if(/^\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.\d{1,3})?$/.test(reportedVersion)){
+  const match=/^Bearer ([a-f0-9]{64})$/.exec(req.get('Authorization')||'');
+  await db.query('UPDATE extension_tokens SET version=$1,last_seen=now() WHERE token=$2',[reportedVersion,h(match[1])]);
+ }
  const result=await db.query('SELECT COUNT(*)::int AS total FROM accesses WHERE employee_id=$1',[req.extensionUser.id]);
  res.set('Cache-Control','no-store').json({name:req.extensionUser.name,assignedAccessCount:result.rows[0].total});
 }));
