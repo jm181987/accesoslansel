@@ -7,8 +7,9 @@ async function load(){
  $('accesses').replaceChildren();
  if(!token)return say('Solicitá al administrador un código de vinculación y pegalo aquí');
  try{
-  await request('/api/extension/heartbeat',token,{version:chrome.runtime.getManifest().version});
   const account=await request('/api/extension/me',token);
+  // Version reporting is optional: a telemetry failure must never log out a valid employee.
+  request('/api/extension/heartbeat',token,{version:chrome.runtime.getManifest().version}).catch(()=>{});
   const platforms=await request('/api/extension/platforms',token);
   let origin=null;
   try{origin=(await current()).origin}catch{}
@@ -31,7 +32,7 @@ async function load(){
    $('accesses').append(row);
   }
  }catch(e){
-  if(/vencid|inválid|vinculá la extensión/i.test(e.message)){
+  if(/vinculación vencida|vinculá la extensión|vinculación inválida/i.test(e.message)){
    await chrome.storage.local.remove('token');$('pairSetup').hidden=false;$('linkedNotice').hidden=true;
    $('accesses').replaceChildren();say('Vinculación vencida o revocada. Solicitá un código nuevo al administrador.');
   }else say(e.message);
