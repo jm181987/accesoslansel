@@ -38,6 +38,19 @@ La aplicación separa los accesos por `employee_id` en el servidor; la extensió
 
 > **Actualizaciones:** una extensión instalada como **descomprimida** no se actualiza automáticamente desde GitHub. Para actualizaciones automáticas reales se requiere distribución administrada o publicación mediante Chrome Web Store / Microsoft Edge Add-ons. La versión del servidor también debe estar desplegada en Vercel para que las funciones nuevas estén disponibles.
 
+### Duración de la vinculación: 30 días
+
+**La vinculación de cada extensión con el funcionario dura 30 días corridos desde el momento en que se utiliza el código y se emite el token.** No son 30 días desde la última conexión.
+
+- **Código de vinculación:** dura **5 minutos**, se usa una sola vez.
+- **Token de extensión:** dura **30 días** desde su emisión; no se renueva automáticamente.
+- **Uso habitual de la extensión:** abrirla, iniciar sesión en plataformas o reportar su versión **no prolonga** esos 30 días.
+- **Actualización de versión:** actualizar Chrome/Edge o la extensión **no reinicia** el plazo del token si se conserva la vinculación.
+- **Al vencer:** la extensión deja de acceder a las credenciales hasta que se vincule nuevamente con un código nuevo generado por el administrador.
+- **Revocación anticipada:** el administrador puede invalidar la vinculación antes de que se cumplan los 30 días.
+
+> **Estado actual:** no existe renovación automática de tokens. La fecha de última conexión que aparece en el panel de administración es informativa y no modifica el vencimiento.
+
 ### Vincular un funcionario
 
 1. El administrador entra al portal y, en **Vincular extensión de un funcionario**, selecciona al funcionario activo.
