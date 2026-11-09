@@ -74,7 +74,7 @@ app.post('/api/extension/exchange',run(async(req,res)=>{
 }));
 app.post('/api/extension/heartbeat',extensionAuth,run(async(req,res)=>{
  const version=String(req.body?.version||'');
- if(!/^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?:\\.\\d{1,3})?$/.test(version))return res.status(400).json({error:'Versión inválida'});
+ if(!/^\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.\d{1,3})?$/.test(version))return res.status(400).json({error:'Versión inválida'});
  const token=/^Bearer ([a-f0-9]{64})$/.exec(req.get('Authorization')||'')?.[1];
  await db.query('UPDATE extension_tokens SET version=$1,last_seen=now() WHERE token=$2',[version,h(token)]);
  res.set('Cache-Control','no-store').json({ok:true});
