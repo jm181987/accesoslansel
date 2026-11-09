@@ -7,6 +7,7 @@ async function load(){
  $('accesses').replaceChildren();
  if(!token)return say('Solicitá al administrador un código de vinculación y pegalo aquí');
  try{
+  await request('/api/extension/heartbeat',token,{version:chrome.runtime.getManifest().version});
   const account=await request('/api/extension/me',token);
   const platforms=await request('/api/extension/platforms',token);
   let origin=null;
