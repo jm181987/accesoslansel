@@ -72,6 +72,17 @@ app.post('/api/extension/exchange',run(async(req,res)=>{
   res.set('Cache-Control','no-store').json({token,expiresInSeconds:2592000});
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }));
+app.post('/api/extension/heartbeat',extensionAuth,run(async(req,res)=>{
+ const version=String(req.body?.version||'');
+ if(!/^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?:\\.\\d{1,3})?$/.test(version))return res.status(400).json({error:'Versión inválida'});
+ const token=/^Bearer ([a-f0-9]{64})$/.exec(req.get('Authorization')||'')?.[1];
+ await db.query('UPDATE extension_tokens SET version=$1,last_seen=now() WHERE token=$2',[version,h(token)]);
+ res.set('Cache-Control','no-store').json({ok:true});
+}));
+app.get('/api/admin/extensions',auth,admin,run(async(req,res)=>{
+ const r=await db.query("SELECT u.id,u.name,u.email,u.active,t.version,t.last_seen,t.expires FROM employees u LEFT JOIN LATERAL (SELECT version,last_seen,expires FROM extension_tokens WHERE user_id=u.id AND expires>now() ORDER BY last_seen DESC NULLS LAST LIMIT 1) t ON true WHERE u.role<>'admin' ORDER BY u.name");
+ res.set('Cache-Control','no-store').json(r.rows);
+}));
 app.get('/api/extension/me',extensionAuth,run(async(req,res)=>{
  const result=await db.query('SELECT COUNT(*)::int AS total FROM accesses WHERE employee_id=$1',[req.extensionUser.id]);
  res.set('Cache-Control','no-store').json({name:req.extensionUser.name,assignedAccessCount:result.rows[0].total});
@@ -150,6 +161,8 @@ await db.query("CREATE TABLE IF NOT EXISTS accesses(id BIGSERIAL PRIMARY KEY,emp
 await db.query("CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 await db.query("CREATE TABLE IF NOT EXISTS extension_pair_codes(code TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 await db.query("CREATE TABLE IF NOT EXISTS extension_tokens(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
+await db.query('ALTER TABLE extension_tokens ADD COLUMN IF NOT EXISTS version TEXT');
+await db.query('ALTER TABLE extension_tokens ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ');
 if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){if(process.env.ADMIN_PASSWORD.length<12)throw Error('Admin password too short');const email=process.env.ADMIN_EMAIL.toLowerCase();const r=await db.query('SELECT id FROM employees WHERE email=$1',[email]);if(!r.rowCount)await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES('Administrador',$1,$2,'admin')",[email,await bcrypt.hash(process.env.ADMIN_PASSWORD,12)])}
 }
 let ready;
