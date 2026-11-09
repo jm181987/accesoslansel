@@ -3,7 +3,7 @@ const $=s=>document.querySelector(s),msg=s=>$('#message').textContent=s;
 const api=async(u,o={})=>{const r=await fetch(u,{...o,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok)throw Error(d.error||'Error');return d};
 const post=(u,d)=>api(u,{method:'POST',body:JSON.stringify(d)});
 const node=(tag,text)=>{const e=document.createElement(tag);e.textContent=text;return e};
-async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(me.role==='admin'){$('#admin').classList.remove('hidden');await users();await managedAccesses()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
+async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(me.role==='admin'){$('#admin').classList.remove('hidden');await users();await managedAccesses();await loadExtensionVersions()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
 async function accesses(){const items=await api('/api/accesses'),root=$('#cards');root.replaceChildren();if(!items.length)root.append(node('p','No tenés accesos asignados.'));for(const a of items){const c=node('div','');c.className='card';c.append(node('h3',a.title),node('p','Usuario: '+a.username));const link=node('a','Abrir enlace');link.href=a.url;link.target='_blank';link.rel='noopener noreferrer';link.className='action';const copy=node('button','Copiar usuario');copy.className='secondary';copy.onclick=()=>navigator.clipboard.writeText(a.username).then(()=>msg('Usuario copiado'));const show=node('button','Ver contraseña');show.onclick=async()=>{try{const p=await api('/api/accesses/'+a.id+'/password');c.querySelector('.secret')?.remove();const area=node('div','');area.className='secret';area.append(node('p',p.password));const b=node('button','Copiar contraseña');b.onclick=()=>navigator.clipboard.writeText(p.password).then(()=>msg('Contraseña copiada'));area.append(b);c.append(area);setTimeout(()=>area.remove(),30000)}catch(e){msg(e.message)}};c.append(link,copy,show);root.append(c)}}
 async function users(){const list=await api('/api/users'),select=$('#userId'),pairSelect=$('#adminPairUser'),root=$('#users');const oldSelect=select.value,oldPair=pairSelect.value;select.replaceChildren();pairSelect.replaceChildren();root.replaceChildren();for(const u of list){if(u.role!=='admin'){const opt=node('option',u.name+' — '+u.email);opt.value=u.id;select.append(opt);if(u.active)pairSelect.append(new Option(u.name+' — '+u.email,String(u.id)))}const line=node('div','');line.className='user';line.dataset.search=(u.name+' '+u.email).toLowerCase();line.append(node('strong',u.name+' — '+u.email+' ('+(u.active?'Activo':'Inactivo')+')'));if(u.role!=='admin'){const b=node('button',u.active?'Desactivar':'Activar');b.className='secondary';b.onclick=async()=>{try{await api('/api/users/'+u.id+'/status',{method:'PATCH',body:JSON.stringify({active:!u.active})});await users()}catch(e){msg(e.message)}};line.append(b)}root.append(line)}if(oldSelect&&[...select.options].some(o=>o.value===oldSelect))select.value=oldSelect;if(oldPair&&[...pairSelect.options].some(o=>o.value===oldPair))pairSelect.value=oldPair;filterUsers()}
 function filterUsers(){const q=($('#userSearch')?.value||'').trim().toLowerCase();document.querySelectorAll('#users .user').forEach(row=>row.classList.toggle('hidden',!row.dataset.search.includes(q)))}
@@ -12,6 +12,26 @@ function showAdminTab(tab){document.querySelectorAll('.admin-section').forEach(e
 document.querySelectorAll('[data-admin-tab]').forEach(btn=>btn.addEventListener('click',()=>showAdminTab(btn.dataset.adminTab)));
 showAdminTab('assign');
 
+async function loadExtensionVersions(){
+ const root=$('#extensionVersions');root.textContent='Cargando versiones...';
+ try{
+  const list=await api('/api/admin/extensions');root.replaceChildren();
+  if(!list.length){root.textContent='No hay funcionarios registrados.';return}
+  const table=document.createElement('table');table.className='extension-table';
+  const head=document.createElement('thead'),hr=document.createElement('tr');
+  for(const title of ['Funcionario','Versión reportada','Última conexión','Estado'])hr.append(node('th',title));head.append(hr);table.append(head);
+  const body=document.createElement('tbody');
+  for(const u of list){
+   const tr=document.createElement('tr');
+   const last=u.last_seen?new Date(u.last_seen):null;
+   const status=!u.expires?'Sin vinculación vigente':!u.version?'Vinculado · sin reporte':last&&Date.now()-last.getTime()>7*86400000?'Sin actividad reciente':'Reportado';
+   for(const value of [u.name+' · '+u.email,u.version||'No informada',last?last.toLocaleString('es-UY'):'Nunca',status])tr.append(node('td',value));
+   body.append(tr);
+  }
+  table.append(body);root.append(table);
+ }catch(e){root.textContent='No se pudo cargar: '+e.message}
+}
+$('#refreshExtensionVersions').addEventListener('click',loadExtensionVersions);
 $('#adminPairUser').addEventListener('change',()=>{$('#adminPairResult').classList.add('hidden');$('#adminPairCode').textContent=''});
 $('#adminPairGenerate').onclick=async()=>{
  const select=$('#adminPairUser'),id=select.value,button=$('#adminPairGenerate');
