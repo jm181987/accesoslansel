@@ -12,3 +12,5 @@ header{position:relative;z-index:2;display:flex;align-items:center;justify-conte
 .admin-section{animation:rise .22s ease both}
 #userSearch{max-width:480px;margin-bottom:16px}
 @media(max-width:650px){.admin-nav{display:grid;grid-template-columns:1fr 1fr}.admin-nav button{font-size:12px;padding:11px 7px;white-space:normal}}
+
+.extension-version-list{overflow-x:auto;margin-top:16px}.extension-table{width:100%;border-collapse:collapse;font-size:13px}.extension-table th,.extension-table td{padding:12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}.extension-table th{color:var(--accent);font-weight:700}.extension-table td{overflow-wrap:anywhere}
