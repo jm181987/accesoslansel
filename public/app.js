@@ -129,9 +129,10 @@ function filterExtensionRows(mode){
  const list=adminExtensionCache;
  for(let i=0;i<rows.length;i++){
   const e=list[i],linked=!!(e?.expires&&new Date(e.expires)>new Date());
-  rows[i].classList.toggle('hidden',mode==='linked'?!linked:mode==='unlinked'?linked:false);
+  const expiring=linked&&new Date(e.expires).getTime()-Date.now()<=7*86400000;
+  rows[i].classList.toggle('hidden',mode==='linked'?!linked:mode==='unlinked'?linked:mode==='expiring'?!expiring:false);
  }
- const title=$('#extensionFilterNote');if(title)title.textContent=mode==='linked'?'Mostrando vinculaciones vigentes':mode==='unlinked'?'Mostrando funcionarios sin vinculación vigente':'Mostrando todas las extensiones';
+ const title=$('#extensionFilterNote');if(title)title.textContent=mode==='linked'?'Mostrando vinculaciones vigentes':mode==='unlinked'?'Mostrando funcionarios sin vinculación vigente':mode==='expiring'?'Mostrando vinculaciones que vencen en 7 días':'Mostrando todas las extensiones';
 }
 $('#clearExtensionFilter').addEventListener('click',()=>filterExtensionRows('all'));
 $('#refreshOverview').addEventListener('click',loadOverview);
@@ -192,7 +193,7 @@ function dismissExpiry(){if(expiryDialog.open)expiryDialog.close()}
 $('#expiryClose').onclick=dismissExpiry;
 $('#expiryLater').onclick=dismissExpiry;
 $('#expiryManage').onclick=()=>{
- dismissExpiry();filterExtensionRows('linked');showAdminTab('extension');
+ dismissExpiry();filterExtensionRows('expiring');showAdminTab('extension');
  document.querySelector('.admin-nav')?.scrollIntoView({behavior:'smooth',block:'start'});
 };
 function showExpiryWarnings(){
