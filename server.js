@@ -54,7 +54,7 @@ app.post('/api/admin/users/:id/extension/revoke',auth,admin,run(async(req,res)=>
  if(!user.rowCount)return res.status(404).json({error:'Funcionario inexistente'});
  const tokens=await db.query('DELETE FROM extension_tokens WHERE user_id=$1',[id]);
  await db.query('DELETE FROM extension_pair_codes WHERE user_id=$1',[id]);
- res.set('Cache-Control','no-store').json({ok:true,revoked:tokens.rowCount});
+ await audit(req.user.id,'extension.revoke',id,{count:tokens.rowCount});res.set('Cache-Control','no-store').json({ok:true,revoked:tokens.rowCount});
 }));
 app.post('/api/extension/exchange',run(async(req,res)=>{
  const code=String(req.body?.code||'').trim().toLowerCase();
@@ -145,11 +145,42 @@ app.patch('/api/admin/users/:id',auth,admin,run(async(req,res)=>{
  const hashed=password?await bcrypt.hash(password,12):null;
  const updated=await db.query('UPDATE employees SET name=$1,email=$2,password_hash=COALESCE($3,password_hash) WHERE id=$4 RETURNING id,name,email,role,active',[name.trim(),normalized,hashed,id]);
  if(hashed){await db.query('DELETE FROM sessions WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_tokens WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_pair_codes WHERE user_id=$1',[id]);}
+ await audit(req.user.id,hashed?'user.password_reset':'user.update',id,{email:normalized});
  res.set('Cache-Control','no-store').json(updated.rows[0]);
 }));
 
-app.post('/api/users/:id/accesses',auth,admin,run(async(req,res)=>{const {title,url,username,password}=req.body;let u;try{u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error()}catch{return res.status(400).json({error:'URL inválida'})}if(!title?.trim()||!username?.trim()||!password)return res.status(400).json({error:'Completá los campos'});const existing=await db.query('SELECT id FROM accesses WHERE employee_id=$1 AND lower(trim(title))=lower($2) AND lower(trim(username))=lower($3) AND url=$4 LIMIT 1',[req.params.id,title.trim(),username.trim(),u.href]);if(existing.rowCount)return res.status(409).json({error:'Este acceso ya está asignado al funcionario. Editá el registro existente en lugar de duplicarlo'});const r=await db.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5) RETURNING id,title,url,username',[req.params.id,title.trim(),u.href,username.trim(),enc(password)]);res.status(201).json(r.rows[0])}));
+app.post('/api/users/:id/accesses',auth,admin,run(async(req,res)=>{const {title,url,username,password}=req.body;let u;try{u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error()}catch{return res.status(400).json({error:'URL inválida'})}if(!title?.trim()||!username?.trim()||!password)return res.status(400).json({error:'Completá los campos'});const existing=await db.query('SELECT id FROM accesses WHERE employee_id=$1 AND lower(trim(title))=lower($2) AND lower(trim(username))=lower($3) AND url=$4 LIMIT 1',[req.params.id,title.trim(),username.trim(),u.href]);if(existing.rowCount)return res.status(409).json({error:'Este acceso ya está asignado al funcionario. Editá el registro existente en lugar de duplicarlo'});const r=await db.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5) RETURNING id,title,url,username',[req.params.id,title.trim(),u.href,username.trim(),enc(password)]);await audit(req.user.id,'access.create',r.rows[0].id,{employee_id:req.params.id,title:title.trim()});res.status(201).json(r.rows[0])}));
 
+// Auditoría administrativa: solo metadatos, nunca credenciales ni tokens.
+async function audit(actor,action,target,details={}){await db.query('INSERT INTO admin_audit(actor_id,action,target,details) VALUES($1,$2,$3,$4)',[actor,action,String(target),JSON.stringify(details)]);}
+app.get('/api/admin/audit',auth,admin,run(async(req,res)=>{
+ const r=await db.query('SELECT a.id,a.action,a.target,a.details,a.created_at,e.name AS actor FROM admin_audit a LEFT JOIN employees e ON e.id=a.actor_id ORDER BY a.id DESC LIMIT 150');
+ res.set('Cache-Control','no-store').json(r.rows);
+}));
+app.post('/api/admin/accesses/bulk',auth,admin,run(async(req,res)=>{
+ const {employee_id,accesses}=req.body||{};
+ if(!/^\\d+$/.test(String(employee_id||''))||!Array.isArray(accesses)||accesses.length<1||accesses.length>20)return res.status(400).json({error:'Seleccioná un funcionario y entre 1 y 20 accesos'});
+ const employee=await db.query("SELECT id FROM employees WHERE id=$1 AND role='user' AND active=true",[employee_id]);
+ if(!employee.rowCount)return res.status(404).json({error:'Funcionario no encontrado o inactivo'});
+ const prepared=[];
+ for(const a of accesses){
+  if(!a||typeof a.title!=='string'||!a.title.trim()||typeof a.username!=='string'||!a.username.trim()||typeof a.password!=='string'||!a.password||a.password.length>4096)return res.status(400).json({error:'Completá todos los campos de cada acceso'});
+  let u;try{u=new URL(a.url);if(!['https:','http:'].includes(u.protocol)||u.username||u.password)throw Error()}catch{return res.status(400).json({error:'URL inválida en uno de los accesos'})}
+  prepared.push({title:a.title.trim(),url:u.href,username:a.username.trim(),secret:enc(a.password)});
+ }
+ const client=await db.connect();let inserted=0;
+ try{
+  await client.query('BEGIN');
+  for(const a of prepared){
+   const exists=await client.query('SELECT id FROM accesses WHERE employee_id=$1 AND lower(trim(title))=lower($2) AND lower(trim(username))=lower($3) AND url=$4 LIMIT 1',[employee_id,a.title,a.username,a.url]);
+   if(exists.rowCount)throw Object.assign(new Error('Acceso duplicado: '+a.title),{status:409});
+   await client.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5)',[employee_id,a.title,a.url,a.username,a.secret]);inserted++;
+  }
+  await client.query('INSERT INTO admin_audit(actor_id,action,target,details) VALUES($1,$2,$3,$4)',[req.user.id,'access.bulk_create',String(employee_id),JSON.stringify({count:inserted})]);
+  await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');if(e.status)return res.status(e.status).json({error:e.message});throw e}finally{client.release()}
+ res.status(201).json({ok:true,count:inserted});
+}));
 app.get('/api/admin/accesses',auth,admin,run(async(req,res)=>{
  const result=await db.query('SELECT a.id,a.employee_id,a.title,a.url,a.username,e.name AS employee_name,e.email AS employee_email FROM accesses a JOIN employees e ON e.id=a.employee_id ORDER BY e.name,a.title');
  res.set('Cache-Control','no-store').json(result.rows);
@@ -165,6 +196,7 @@ app.patch('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
  const changePassword=typeof password==='string'&&password.length>0;
  const result=await db.query('UPDATE accesses SET title=$1,url=$2,username=$3,secret=CASE WHEN $5::boolean THEN $6 ELSE secret END WHERE id=$4 RETURNING id,employee_id,title,url,username',[title.trim(),parsed.href,username.trim(),id,changePassword,changePassword?enc(password):null]);
  if(!result.rowCount)return res.status(404).json({error:'Acceso no encontrado'});
+ await audit(req.user.id,'access.update',id,{title:title.trim()});
  res.set('Cache-Control','no-store').json(result.rows[0]);
 }));
 app.delete('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
@@ -172,9 +204,10 @@ app.delete('/api/admin/accesses/:id',auth,admin,run(async(req,res)=>{
  if(!/^[0-9]+$/.test(id))return res.status(400).json({error:'Identificador inválido'});
  const result=await db.query('DELETE FROM accesses WHERE id=$1 RETURNING id,title,employee_id',[id]);
  if(!result.rowCount)return res.status(404).json({error:'Acceso no encontrado'});
+ await audit(req.user.id,'access.delete',id,{title:result.rows[0].title,employee_id:result.rows[0].employee_id});
  res.set('Cache-Control','no-store').json({ok:true,id:result.rows[0].id});
 }));
-app.patch('/api/users/:id/status',auth,admin,run(async(req,res)=>{if(String(req.user.id)===req.params.id)return res.status(400).json({error:'No podés desactivarte'});await db.query('UPDATE employees SET active=$1 WHERE id=$2',[req.body.active===true,req.params.id]);res.json({ok:true})}));
+app.patch('/api/users/:id/status',auth,admin,run(async(req,res)=>{if(String(req.user.id)===req.params.id)return res.status(400).json({error:'No podés desactivarte'});await db.query('UPDATE employees SET active=$1 WHERE id=$2',[req.body.active===true,req.params.id]);await audit(req.user.id,'user.status',req.params.id,{active:req.body.active===true});res.json({ok:true})}));
 app.use((err,req,res,next)=>{console.error(err);res.status(err.code==='23505'?409:500).json({error:err.code==='23505'?'Correo ya registrado':'Error interno'})});
 async function init(){
 await db.query("CREATE TABLE IF NOT EXISTS employees(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL DEFAULT 'user',active BOOLEAN NOT NULL DEFAULT true)");
@@ -184,6 +217,7 @@ await db.query("CREATE TABLE IF NOT EXISTS extension_pair_codes(code TEXT PRIMAR
 await db.query("CREATE TABLE IF NOT EXISTS extension_tokens(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 await db.query('ALTER TABLE extension_tokens ADD COLUMN IF NOT EXISTS version TEXT');
 await db.query('ALTER TABLE extension_tokens ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ');
+await db.query('CREATE TABLE IF NOT EXISTS admin_audit(id BIGSERIAL PRIMARY KEY,actor_id BIGINT REFERENCES employees(id) ON DELETE SET NULL,action TEXT NOT NULL,target TEXT NOT NULL,details JSONB NOT NULL DEFAULT \'{}\'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT now())');
 if(process.env.ADMIN_EMAIL&&process.env.ADMIN_PASSWORD){if(process.env.ADMIN_PASSWORD.length<12)throw Error('Admin password too short');const email=process.env.ADMIN_EMAIL.toLowerCase();const r=await db.query('SELECT id FROM employees WHERE email=$1',[email]);if(!r.rowCount)await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES('Administrador',$1,$2,'admin')",[email,await bcrypt.hash(process.env.ADMIN_PASSWORD,12)])}
 }
 let ready;
