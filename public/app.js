@@ -137,7 +137,7 @@ $('#clearExtensionFilter').addEventListener('click',()=>filterExtensionRows('all
 $('#refreshOverview').addEventListener('click',loadOverview);
 let adminAccessCache=[],adminExtensionCache=[];
 async function refreshAdminData(){
- try{[adminAccessCache,adminExtensionCache]=await Promise.all([api('/api/admin/accesses'),api('/api/admin/extensions')]);renderMatrix();renderAlerts();refreshGlobalSearch()}catch(e){msg('No se pudieron actualizar los datos administrativos: '+e.message,'error')}
+ try{[adminAccessCache,adminExtensionCache]=await Promise.all([api('/api/admin/accesses'),api('/api/admin/extensions')]);renderMatrix();renderAlerts();refreshGlobalSearch();showExpiryWarnings()}catch(e){msg('No se pudieron actualizar los datos administrativos: '+e.message,'error')}
  const bulk=$('#bulkEmployee'),previous=bulk.value;bulk.replaceChildren(new Option('Seleccioná un funcionario',''));
  for(const u of employeeCache.filter(x=>x.role!=='admin'&&x.active))bulk.append(new Option(u.name+' — '+u.email,String(u.id)));
  if(previous)bulk.value=previous;
@@ -187,6 +187,33 @@ function renderAlerts(){
  for(const [title,description] of alerts){const row=document.createElement('div');row.className='alert-item';row.append(node('strong',title),node('p',description));root.append(row)}
 }
 $('#refreshAlerts').onclick=refreshAdminData;
+const expiryDialog=$('#expiryDialog');
+function dismissExpiry(){if(expiryDialog.open)expiryDialog.close()}
+$('#expiryClose').onclick=dismissExpiry;
+$('#expiryLater').onclick=dismissExpiry;
+$('#expiryManage').onclick=()=>{
+ dismissExpiry();filterExtensionRows('linked');showAdminTab('extension');
+ document.querySelector('.admin-nav')?.scrollIntoView({behavior:'smooth',block:'start'});
+};
+function showExpiryWarnings(){
+ if($('#admin').classList.contains('hidden')||expiryDialog.open)return;
+ const now=Date.now(),sevenDays=7*86400000;
+ const upcoming=adminExtensionCache.filter(e=>e.active&&e.expires&&new Date(e.expires).getTime()>now&&new Date(e.expires).getTime()-now<=sevenDays);
+ if(!upcoming.length)return;
+ // Mostrar una vez por pestaña y conjunto de vencimientos; volver a avisar en una nueva visita.
+ const signature=upcoming.map(e=>String(e.id)+':'+e.expires).sort().join('|');
+ if(sessionStorage.getItem('lansel-expiry-notified')===signature)return;
+ sessionStorage.setItem('lansel-expiry-notified',signature);
+ const list=$('#expiryList');list.replaceChildren();
+ for(const e of upcoming){
+  const remaining=Math.max(1,Math.ceil((new Date(e.expires).getTime()-now)/86400000));
+  const row=document.createElement('div');row.className='expiry-item';
+  row.append(node('strong',e.name+' · '+e.email),node('span','Vence en '+remaining+' día'+(remaining===1?'':'s')+' · '+new Date(e.expires).toLocaleString('es-UY')));
+  list.append(row);
+ }
+ expiryDialog.showModal();
+}
+
 async function loadAudit(){
  const root=$('#auditEntries');root.textContent='Cargando…';
  try{const rows=await api('/api/admin/audit');root.replaceChildren();if(!rows.length){root.textContent='Todavía no hay eventos registrados.';return}
