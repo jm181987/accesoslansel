@@ -104,7 +104,7 @@ document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click'
 const dialog=$('#adminDialog'),dialogBody=$('#dialogBody');
 const formHomes=new Map();
 let editorHome=null;
-function openEditorModal(form){editorHome=form.parentNode;dialogBody.replaceChildren();dialogBody.append(form);$('#dialogTitle').textContent='Editar acceso';if(!dialog.open)dialog.showModal();}
+function openEditorModal(form){editorHome=form.parentNode;dialogBody.replaceChildren();dialogBody.append(form);form.classList.remove('hidden');$('#dialogTitle').textContent='Editar acceso';if(!dialog.open)dialog.showModal();}
 function openFormModal(id,title){
  const form=$('#'+id);if(!form)return;
  if(!formHomes.has(id))formHomes.set(id,{parent:form.parentNode,next:form.nextSibling});
@@ -116,7 +116,7 @@ function openFormModal(id,title){
 function closeDialog(){
  if(dialog.open)dialog.close();
  for(const [id,home] of formHomes){const form=$('#'+id);if(form&&form.parentNode===dialogBody)home.parent.insertBefore(form,home.next)}
- if(editorHome){const form=dialogBody.querySelector('.managed-access');if(form)editorHome.append(form);editorHome=null}
+ if(editorHome){const form=dialogBody.querySelector('.managed-access');if(form){form.classList.add('hidden');editorHome.append(form)}editorHome=null}
  dialogBody.replaceChildren();
 }
 $('#dialogClose').addEventListener('click',closeDialog);
@@ -199,7 +199,7 @@ async function managedAccesses(selectedId, preferredEmployeeId){
    remove.disabled=true;feedback.textContent='Eliminando...';
    try{
     await api('/api/admin/accesses/'+a.id,{method:'DELETE'});
-    msg('Acceso eliminado');await managedAccesses();await accesses();
+    closeDialog();msg('Acceso eliminado');await managedAccesses();await loadOverview();await accesses();
    }catch(err){feedback.textContent='Error: '+err.message;remove.disabled=false}
   };
   actions.append(save,remove,feedback);form.append(actions);
@@ -211,7 +211,7 @@ async function managedAccesses(selectedId, preferredEmployeeId){
     heading.textContent=a.employee_name+' — '+a.title;
     const opt=[...accessSelect.options].find(o=>o.value===String(a.id));if(opt)opt.textContent=a.title+' — '+a.username;
     passwordInput.value='';
-    feedback.textContent='✓ Cambios guardados';
+    feedback.textContent='✓ Cambios guardados';closeDialog();msg('Acceso actualizado','success');
     await accesses();
    }catch(err){feedback.textContent='Error: '+err.message}
    finally{save.disabled=false}
