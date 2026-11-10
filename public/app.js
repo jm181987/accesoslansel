@@ -17,14 +17,57 @@ $('#toastClose')?.addEventListener('click',()=>{clearTimeout(toastTimer);$('#toa
 const api=async(u,o={})=>{const r=await fetch(u,{...o,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok){const err=new Error(d.error||'Error');err.status=r.status;err.details=d;throw err}return d};
 const post=(u,d)=>api(u,{method:'POST',body:JSON.stringify(d)});
 const node=(tag,text)=>{const e=document.createElement(tag);e.textContent=text;return e};
-async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(me.role==='admin'){$('#admin').classList.remove('hidden');await users();await managedAccesses();await loadExtensionVersions()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
+async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(me.role==='admin'){$('#admin').classList.remove('hidden');await users();await managedAccesses();await loadExtensionVersions();await loadOverview()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
 async function accesses(){const items=await api('/api/accesses'),root=$('#cards');root.replaceChildren();if(!items.length)root.append(node('p','No tenés accesos asignados.'));for(const a of items){const c=node('div','');c.className='card';c.append(node('h3',a.title),node('p','Usuario: '+a.username));const link=node('a','Abrir enlace');link.href=a.url;link.target='_blank';link.rel='noopener noreferrer';link.className='action';const copy=node('button','Copiar usuario');copy.className='secondary';copy.onclick=()=>navigator.clipboard.writeText(a.username).then(()=>msg('Usuario copiado'));const show=node('button','Ver contraseña');show.onclick=async()=>{try{const p=await api('/api/accesses/'+a.id+'/password');c.querySelector('.secret')?.remove();const area=node('div','');area.className='secret';area.append(node('p',p.password));const b=node('button','Copiar contraseña');b.onclick=()=>navigator.clipboard.writeText(p.password).then(()=>msg('Contraseña copiada'));area.append(b);c.append(area);setTimeout(()=>area.remove(),30000)}catch(e){msg(e.message)}};c.append(link,copy,show);root.append(c)}}
-async function users(){const list=await api('/api/users'),select=$('#userId'),pairSelect=$('#adminPairUser'),root=$('#users');const oldSelect=select.value,oldPair=pairSelect.value;select.replaceChildren();pairSelect.replaceChildren();root.replaceChildren();for(const u of list){if(u.role!=='admin'){const opt=node('option',u.name+' — '+u.email);opt.value=u.id;select.append(opt);if(u.active)pairSelect.append(new Option(u.name+' — '+u.email,String(u.id)))}const line=node('div','');line.className='user';line.dataset.email=u.email.toLowerCase();line.dataset.search=(u.name+' '+u.email).toLowerCase();line.append(node('strong',u.name+' — '+u.email+' ('+(u.active?'Activo':'Inactivo')+')'));if(u.role!=='admin'){const b=node('button',u.active?'Desactivar':'Activar');b.className='secondary';b.onclick=async()=>{try{await api('/api/users/'+u.id+'/status',{method:'PATCH',body:JSON.stringify({active:!u.active})});await users()}catch(e){msg(e.message)}};line.append(b)}root.append(line)}if(oldSelect&&[...select.options].some(o=>o.value===oldSelect))select.value=oldSelect;if(oldPair&&[...pairSelect.options].some(o=>o.value===oldPair))pairSelect.value=oldPair;filterUsers()}
-function filterUsers(){const q=($('#userSearch')?.value||'').trim().toLowerCase();let shown=0;document.querySelectorAll('#users .user').forEach(row=>{const visible=row.dataset.search.includes(q);row.classList.toggle('hidden',!visible);if(visible)shown++});const counter=$('#userSearchResult');if(counter)counter.textContent=shown+' funcionario(s) encontrados'+(shown===0?' · Revisá el correo completo o limpiá la búsqueda.':'')}
+let employeeCache=[];
+async function users(){
+ const list=await api('/api/users');employeeCache=list;
+ const select=$('#userId'),pairSelect=$('#adminPairUser'),root=$('#users');
+ const oldSelect=select.value,oldPair=pairSelect.value;
+ select.replaceChildren();pairSelect.replaceChildren();root.replaceChildren();
+ const table=document.createElement('table');table.className='employee-table';
+ const thead=document.createElement('thead'),tr=document.createElement('tr');
+ for(const label of ['Funcionario','Correo','Estado','Acciones'])tr.append(node('th',label));
+ thead.append(tr);table.append(thead);
+ const tbody=document.createElement('tbody');
+ for(const u of list){
+  if(u.role!=='admin'){
+   const opt=new Option(u.name+' — '+u.email,String(u.id));select.append(opt);
+   if(u.active)pairSelect.append(new Option(u.name+' — '+u.email,String(u.id)));
+  }
+  const line=document.createElement('tr');line.className='user';
+  line.dataset.email=u.email.toLowerCase();line.dataset.search=(u.name+' '+u.email).toLowerCase();
+  line.dataset.active=String(u.active);
+  line.append(node('td',u.name),node('td',u.email));
+  const status=node('td',u.active?'Activo':'Inactivo');status.className=u.active?'employee-active':'employee-inactive';line.append(status);
+  const actionCell=document.createElement('td');const actions=document.createElement('div');actions.className='employee-actions';
+  if(u.role!=='admin'){
+   const edit=node('button','Editar');edit.type='button';edit.className='secondary';edit.onclick=()=>editEmployee(u);actions.append(edit);
+   const accessesButton=node('button','Accesos');accessesButton.type='button';accessesButton.className='secondary';
+   accessesButton.onclick=async()=>{showAdminTab('edit');await managedAccesses(undefined,String(u.id))};actions.append(accessesButton);
+   const toggle=node('button',u.active?'Desactivar':'Activar');toggle.type='button';toggle.className='secondary';
+   toggle.onclick=async()=>{try{await api('/api/users/'+u.id+'/status',{method:'PATCH',body:JSON.stringify({active:!u.active})});await users();await loadOverview();msg('Estado actualizado','success')}catch(e){msg(e.message,'error')}};actions.append(toggle);
+  }else actions.append(node('span','Administrador'));
+  actionCell.append(actions);line.append(actionCell);tbody.append(line);
+ }
+ table.append(tbody);root.append(table);
+ if(oldSelect&&[...select.options].some(o=>o.value===oldSelect))select.value=oldSelect;
+ if(oldPair&&[...pairSelect.options].some(o=>o.value===oldPair))pairSelect.value=oldPair;
+ filterUsers();
+}
+function filterUsers(){
+ const q=($('#userSearch')?.value||'').trim().toLowerCase(),state=$('#userStatusFilter')?.value||'all';let shown=0;
+ document.querySelectorAll('#users .user').forEach(row=>{
+  const visible=row.dataset.search.includes(q)&&(state==='all'||row.dataset.active===String(state==='active'));
+  row.classList.toggle('hidden',!visible);if(visible)shown++;
+ });
+ const counter=$('#userSearchResult');if(counter)counter.textContent=shown+' funcionario(s) encontrados'+(shown===0?' · Revisá el correo o los filtros.':'');
+}
+$('#userStatusFilter').addEventListener('change',filterUsers);
 $('#userSearch').addEventListener('input',filterUsers);
 function showAdminTab(tab){document.querySelectorAll('.admin-section').forEach(el=>el.classList.toggle('hidden',el.dataset.section!==tab));document.querySelectorAll('[data-admin-tab]').forEach(btn=>{const active=btn.dataset.adminTab===tab;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))});}
 document.querySelectorAll('[data-admin-tab]').forEach(btn=>btn.addEventListener('click',()=>showAdminTab(btn.dataset.adminTab)));
-showAdminTab('assign');
+showAdminTab('overview');
 
 async function loadExtensionVersions(){
  const root=$('#extensionVersions');root.textContent='Cargando versiones...';
@@ -46,6 +89,52 @@ async function loadExtensionVersions(){
  }catch(e){root.textContent='No se pudo cargar: '+e.message}
 }
 $('#refreshExtensionVersions').addEventListener('click',loadExtensionVersions);
+async function loadOverview(){
+ const root=$('#overviewStats');root.textContent='Actualizando indicadores…';
+ try{
+  const [people,accessList,extensions]=await Promise.all([api('/api/users'),api('/api/admin/accesses'),api('/api/admin/extensions')]);
+  const linked=extensions.filter(e=>e.expires&&new Date(e.expires)>new Date()).length;
+  const stats=[['Funcionarios',people.length],['Activos',people.filter(u=>u.active).length],['Inactivos',people.filter(u=>!u.active).length],['Accesos asignados',accessList.length],['Vinculaciones vigentes',linked],['Sin vinculación vigente',people.filter(u=>u.role!=='admin').length-linked]];
+  root.replaceChildren();
+  for(const [label,value] of stats){const card=document.createElement('div');card.className='overview-stat';card.append(node('strong',String(Math.max(0,value))),node('span',label));root.append(card)}
+ }catch(e){root.textContent='No se pudieron cargar los indicadores: '+e.message;msg(e.message,'error')}
+}
+$('#refreshOverview').addEventListener('click',loadOverview);
+document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>showAdminTab(b.dataset.goTab)));
+const dialog=$('#adminDialog'),dialogBody=$('#dialogBody');
+const formHomes=new Map();
+function openFormModal(id,title){
+ const form=$('#'+id);if(!form)return;
+ if(!formHomes.has(id))formHomes.set(id,{parent:form.parentNode,next:form.nextSibling});
+ dialogBody.replaceChildren();dialogBody.append(form);
+ $('#dialogTitle').textContent=title;
+ if(!dialog.open)dialog.showModal();
+ form.querySelector('input,select')?.focus();
+}
+function closeDialog(){
+ if(dialog.open)dialog.close();
+ for(const [id,home] of formHomes){const form=$('#'+id);if(form&&form.parentNode===dialogBody)home.parent.insertBefore(form,home.next)}
+ dialogBody.replaceChildren();
+}
+$('#dialogClose').addEventListener('click',closeDialog);
+dialog.addEventListener('cancel',e=>{e.preventDefault();closeDialog()});
+dialog.addEventListener('click',e=>{if(e.target===dialog)closeDialog()});
+document.querySelectorAll('[data-open-modal]').forEach(b=>b.addEventListener('click',()=>openFormModal(b.dataset.openModal,b.dataset.openModal==='newUser'?'Crear funcionario':'Asignar acceso')));
+function editEmployee(u){
+ dialogBody.replaceChildren();$('#dialogTitle').textContent='Editar funcionario';
+ const form=document.createElement('form');form.className='employee-edit-form';
+ const fields=[['name','Nombre',u.name,'text'],['email','Correo',u.email,'email'],['password','Nueva contraseña (opcional)','','password']];
+ for(const [name,label,value,type] of fields){const wrap=document.createElement('label');wrap.textContent=label;const input=document.createElement('input');input.name=name;input.type=type;input.value=value;input.required=name!=='password';if(name==='password'){input.minLength=12;input.autocomplete='new-password';input.placeholder='Dejar vacío para conservar la actual'}wrap.append(input);form.append(wrap)}
+ const note=node('p','Cambiar la contraseña cerrará las sesiones y desvinculará la extensión de este funcionario por seguridad.');note.className='muted';form.append(note);
+ const save=node('button','Guardar cambios');save.type='submit';form.append(save);
+ form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{
+  const data=Object.fromEntries(new FormData(form));if(!data.password)delete data.password;
+  await api('/api/admin/users/'+u.id,{method:'PATCH',body:JSON.stringify(data)});
+  closeDialog();await users();await loadOverview();msg('Funcionario actualizado','success');
+ }catch(err){msg(err.message,'error')}finally{save.disabled=false}};
+ dialogBody.append(form);dialog.showModal();
+}
+
 $('#adminPairUser').addEventListener('change',()=>{$('#adminPairResult').classList.add('hidden');$('#adminPairCode').textContent=''});
 $('#adminPairGenerate').onclick=async()=>{
  const select=$('#adminPairUser'),id=select.value,button=$('#adminPairGenerate');
@@ -153,7 +242,7 @@ $('#loginForm').onsubmit=async e=>{e.preventDefault();try{await post('/api/login
 $('#pairExtension').onclick=async()=>{try{const r=await post('/api/extension/pair',{});$('#pairCode').textContent=r.code;$('#pairResult').classList.remove('hidden');msg('Código generado. Vence en 5 minutos.')}catch(e){msg(e.message)}};
 $('#copyPairCode').onclick=()=>navigator.clipboard.writeText($('#pairCode').textContent).then(()=>msg('Código copiado')).catch(()=>msg('Seleccioná y copiá el código manualmente'));
 $('#logout').onclick=async()=>{await post('/api/logout',{});location.reload()};
-$('#newUser').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{await post('/api/users',data);e.target.reset();msg('Funcionario creado');await users()}catch(err){if(err.status===409){showAdminTab('people');$('#userSearch').value=data.email.trim().toLowerCase();await users();const match=[...document.querySelectorAll('#users .user')].find(row=>row.dataset.email===data.email.trim().toLowerCase());if(match){msg('Este correo ya está registrado. Encontré el funcionario existente y lo mostré en la lista.')}else{msg('El correo ya existe en la base de datos, pero no aparece en el listado. Verificá que estés usando la misma base de datos y consultá al administrador.')}}else msg(err.message)}};
+$('#newUser').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{await post('/api/users',data);e.target.reset();closeDialog();msg('Funcionario creado','success');await users();await loadOverview()}catch(err){if(err.status===409){showAdminTab('people');$('#userSearch').value=data.email.trim().toLowerCase();await users();const match=[...document.querySelectorAll('#users .user')].find(row=>row.dataset.email===data.email.trim().toLowerCase());if(match){msg('Este correo ya está registrado. Encontré el funcionario existente y lo mostré en la lista.')}else{msg('El correo ya existe en la base de datos, pero no aparece en el listado. Verificá que estés usando la misma base de datos y consultá al administrador.')}}else msg(err.message)}};
 
 const platformUrls={
  'CRM MONETY':'https://crm.monetytrade.com/',
@@ -174,5 +263,5 @@ $('#platformPreset').addEventListener('change',e=>{
  $('#newAccess').elements.url.value=platformUrls[name]||'';syncVoiceSpinLabels();
 });
 $('#newAccessPasswordEye').onclick=()=>{const el=$('#newAccessPassword');const show=el.type==='password';el.type=show?'text':'password';$('#newAccessPasswordEye').textContent=show?'Ocultar':'👁 Mostrar'};
-$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);const selectedEmployee=d.userId;e.target.reset();$('#userId').value=selectedEmployee;$('#newAccessPassword').type='password';$('#newAccessPasswordEye').textContent='👁 Mostrar';syncVoiceSpinLabels();msg('Acceso asignado. Funcionario seleccionado conservado.');await managedAccesses(undefined,selectedEmployee)}catch(err){msg(err.message)}};
+$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);const selectedEmployee=d.userId;e.target.reset();$('#userId').value=selectedEmployee;$('#newAccessPassword').type='password';$('#newAccessPasswordEye').textContent='👁 Mostrar';syncVoiceSpinLabels();closeDialog();msg('Acceso asignado. Funcionario seleccionado conservado.','success');await managedAccesses(undefined,selectedEmployee);await loadOverview()}catch(err){msg(err.message)}};
 load();
