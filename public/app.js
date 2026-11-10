@@ -95,10 +95,40 @@ async function loadOverview(){
  try{
   const [people,accessList,extensions]=await Promise.all([api('/api/users'),api('/api/admin/accesses'),api('/api/admin/extensions')]);
   const linked=extensions.filter(e=>e.expires&&new Date(e.expires)>new Date()).length;
-  const stats=[['Funcionarios',people.length],['Activos',people.filter(u=>u.active).length],['Inactivos',people.filter(u=>!u.active).length],['Accesos asignados',accessList.length],['Vinculaciones vigentes',linked],['Sin vinculación vigente',people.filter(u=>u.role!=='admin').length-linked]];
+  const nonAdmins=people.filter(u=>u.role!=='admin');
+  const linkedIds=new Set(extensions.filter(e=>e.expires&&new Date(e.expires)>new Date()).map(e=>String(e.id)));
+  const stats=[
+   {label:'Funcionarios',value:nonAdmins.length,tab:'people',filter:'all'},
+   {label:'Activos',value:nonAdmins.filter(u=>u.active).length,tab:'people',filter:'active'},
+   {label:'Inactivos',value:nonAdmins.filter(u=>!u.active).length,tab:'people',filter:'inactive'},
+   {label:'Accesos asignados',value:accessList.length,tab:'edit'},
+   {label:'Vinculaciones vigentes',value:linkedIds.size,tab:'extension',filter:'linked'},
+   {label:'Sin vinculación vigente',value:nonAdmins.filter(u=>!linkedIds.has(String(u.id))).length,tab:'extension',filter:'unlinked'}
+  ];
   root.replaceChildren();
-  for(const [label,value] of stats){const card=document.createElement('div');card.className='overview-stat';card.append(node('strong',String(Math.max(0,value))),node('span',label));root.append(card)}
+  for(const item of stats){
+   const card=document.createElement('button');card.type='button';card.className='overview-stat overview-stat-link';
+   card.append(node('strong',String(item.value)),node('span',item.label));
+   const hint=node('small','Ver y gestionar →');hint.className='overview-stat-hint';card.append(hint);
+   card.setAttribute('aria-label',item.label+': '+item.value+'. Ver y gestionar');
+   card.onclick=()=>{
+    if(item.tab==='people'){$('#userStatusFilter').value=item.filter;$('#userSearch').value='';filterUsers()}
+    if(item.tab==='extension')filterExtensionRows(item.filter);
+    showAdminTab(item.tab);
+    document.querySelector('.admin-nav')?.scrollIntoView({behavior:'smooth',block:'start'});
+   };
+   root.append(card);
+  }
  }catch(e){root.textContent='No se pudieron cargar los indicadores: '+e.message;msg(e.message,'error')}
+}
+function filterExtensionRows(mode){
+ const rows=[...document.querySelectorAll('#extensionVersions tbody tr')];
+ const list=adminExtensionCache;
+ for(let i=0;i<rows.length;i++){
+  const e=list[i],linked=!!(e?.expires&&new Date(e.expires)>new Date());
+  rows[i].classList.toggle('hidden',mode==='linked'?!linked:mode==='unlinked'?linked:false);
+ }
+ const title=$('#extensionFilterNote');if(title)title.textContent=mode==='linked'?'Mostrando vinculaciones vigentes':mode==='unlinked'?'Mostrando funcionarios sin vinculación vigente':'Mostrando todas las extensiones';
 }
 $('#refreshOverview').addEventListener('click',loadOverview);
 let adminAccessCache=[],adminExtensionCache=[];
