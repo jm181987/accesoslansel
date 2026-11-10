@@ -45,3 +45,7 @@ header{position:relative;z-index:2;display:flex;align-items:center;justify-conte
 .dialog-header .secondary{padding:7px 13px;font-size:23px;margin:0}.admin-dialog form{max-width:none}.admin-dialog .managed-access{margin:0;padding:0;border:0;background:transparent}
 .admin-dialog label{display:block;margin-bottom:13px}.admin-dialog input,.admin-dialog select{width:100%}
 @media(max-width:650px){.admin-overview{padding:17px}.overview-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.overview-stat{padding:13px}.overview-stat strong{font-size:25px}.admin-dialog{padding:18px}.overview-shortcuts button{flex:1 1 100%}}
+
+/* Los formularios se abren únicamente desde sus botones modales */
+#admin > .panel #newUser,#admin > .panel #newAccess{display:none}
+#adminDialog #newUser,#adminDialog #newAccess{display:block}
