@@ -87,6 +87,7 @@ async function loadExtensionVersions(){
    body.append(tr);
   }
   table.append(body);root.append(table);
+  filterExtensionRows(currentExtensionFilter);
  }catch(e){root.textContent='No se pudo cargar: '+e.message}
 }
 $('#refreshExtensionVersions').addEventListener('click',loadExtensionVersions);
@@ -121,7 +122,9 @@ async function loadOverview(){
   }
  }catch(e){root.textContent='No se pudieron cargar los indicadores: '+e.message;msg(e.message,'error')}
 }
+let currentExtensionFilter='all';
 function filterExtensionRows(mode){
+ currentExtensionFilter=mode;
  const rows=[...document.querySelectorAll('#extensionVersions tbody tr')];
  const list=adminExtensionCache;
  for(let i=0;i<rows.length;i++){
@@ -130,6 +133,7 @@ function filterExtensionRows(mode){
  }
  const title=$('#extensionFilterNote');if(title)title.textContent=mode==='linked'?'Mostrando vinculaciones vigentes':mode==='unlinked'?'Mostrando funcionarios sin vinculación vigente':'Mostrando todas las extensiones';
 }
+$('#clearExtensionFilter').addEventListener('click',()=>filterExtensionRows('all'));
 $('#refreshOverview').addEventListener('click',loadOverview);
 let adminAccessCache=[],adminExtensionCache=[];
 async function refreshAdminData(){
