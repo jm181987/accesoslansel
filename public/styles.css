@@ -63,3 +63,11 @@ header{position:relative;z-index:2;display:flex;align-items:center;justify-conte
 .bulk-row>*{min-width:0}.bulk-actions,.profile-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 .profile-card p{overflow-wrap:anywhere;margin:12px 0}.profile-card h3{margin:24px 0 10px}
 @media(max-width:650px){.bulk-row{grid-template-columns:1fr}.global-results{max-height:260px}}
+
+/* Indicadores interactivos del resumen */
+.overview-stat-link{width:100%;margin:0;text-align:left;cursor:pointer;font:inherit;color:inherit;box-shadow:none;transition:transform .16s ease,border-color .16s ease,background .16s ease}
+.overview-stat-link:hover{transform:translateY(-3px);border-color:#65e6ca;background:#19334a}
+.overview-stat-link:focus-visible{outline:3px solid #65e6ca;outline-offset:3px}
+.overview-stat-hint{font-size:11px;color:#7be6d3;margin-top:4px}
+.extension-filter-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+.extension-filter-bar button{margin:0;padding:8px 12px;font-size:12px}
