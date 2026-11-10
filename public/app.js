@@ -17,7 +17,7 @@ $('#toastClose')?.addEventListener('click',()=>{clearTimeout(toastTimer);$('#toa
 const api=async(u,o={})=>{const r=await fetch(u,{...o,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok){const err=new Error(d.error||'Error');err.status=r.status;err.details=d;throw err}return d};
 const post=(u,d)=>api(u,{method:'POST',body:JSON.stringify(d)});
 const node=(tag,text)=>{const e=document.createElement(tag);e.textContent=text;return e};
-async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(me.role==='admin'){$('#admin').classList.remove('hidden');await users();await managedAccesses();await loadExtensionVersions();await loadOverview()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
+async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(me.role==='admin'){$('#admin').classList.remove('hidden');await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
 async function accesses(){const items=await api('/api/accesses'),root=$('#cards');root.replaceChildren();if(!items.length)root.append(node('p','No tenés accesos asignados.'));for(const a of items){const c=node('div','');c.className='card';c.append(node('h3',a.title),node('p','Usuario: '+a.username));const link=node('a','Abrir enlace');link.href=a.url;link.target='_blank';link.rel='noopener noreferrer';link.className='action';const copy=node('button','Copiar usuario');copy.className='secondary';copy.onclick=()=>navigator.clipboard.writeText(a.username).then(()=>msg('Usuario copiado'));const show=node('button','Ver contraseña');show.onclick=async()=>{try{const p=await api('/api/accesses/'+a.id+'/password');c.querySelector('.secret')?.remove();const area=node('div','');area.className='secret';area.append(node('p',p.password));const b=node('button','Copiar contraseña');b.onclick=()=>navigator.clipboard.writeText(p.password).then(()=>msg('Contraseña copiada'));area.append(b);c.append(area);setTimeout(()=>area.remove(),30000)}catch(e){msg(e.message)}};c.append(link,copy,show);root.append(c)}}
 let employeeCache=[];
 async function users(){
@@ -42,11 +42,12 @@ async function users(){
   const status=node('td',u.active?'Activo':'Inactivo');status.className=u.active?'employee-active':'employee-inactive';line.append(status);
   const actionCell=document.createElement('td');const actions=document.createElement('div');actions.className='employee-actions';
   if(u.role!=='admin'){
+   const profile=node('button','Ficha');profile.type='button';profile.className='secondary';profile.onclick=()=>openEmployeeProfile(u);actions.append(profile);
    const edit=node('button','Editar');edit.type='button';edit.className='secondary';edit.onclick=()=>editEmployee(u);actions.append(edit);
    const accessesButton=node('button','Accesos');accessesButton.type='button';accessesButton.className='secondary';
    accessesButton.onclick=async()=>{showAdminTab('edit');await managedAccesses(undefined,String(u.id))};actions.append(accessesButton);
    const toggle=node('button',u.active?'Desactivar':'Activar');toggle.type='button';toggle.className='secondary';
-   toggle.onclick=async()=>{try{await api('/api/users/'+u.id+'/status',{method:'PATCH',body:JSON.stringify({active:!u.active})});await users();await loadOverview();msg('Estado actualizado','success')}catch(e){msg(e.message,'error')}};actions.append(toggle);
+   toggle.onclick=async()=>{try{await api('/api/users/'+u.id+'/status',{method:'PATCH',body:JSON.stringify({active:!u.active})});await users();await loadOverview();await refreshAdminData();msg('Estado actualizado','success')}catch(e){msg(e.message,'error')}};actions.append(toggle);
   }else actions.append(node('span','Administrador'));
   actionCell.append(actions);line.append(actionCell);tbody.append(line);
  }
@@ -66,7 +67,7 @@ function filterUsers(){
 $('#userStatusFilter').addEventListener('change',filterUsers);
 $('#userSearch').addEventListener('input',filterUsers);
 function showAdminTab(tab){document.querySelectorAll('.admin-section').forEach(el=>el.classList.toggle('hidden',el.dataset.section!==tab));document.querySelectorAll('[data-admin-tab]').forEach(btn=>{const active=btn.dataset.adminTab===tab;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))});}
-document.querySelectorAll('[data-admin-tab]').forEach(btn=>btn.addEventListener('click',()=>showAdminTab(btn.dataset.adminTab)));
+document.querySelectorAll('[data-admin-tab]').forEach(btn=>btn.addEventListener('click',async()=>{showAdminTab(btn.dataset.adminTab);if(btn.dataset.adminTab==='audit')await loadAudit();if(['matrix','alerts','bulk'].includes(btn.dataset.adminTab))await refreshAdminData()}));
 showAdminTab('overview');
 
 async function loadExtensionVersions(){
@@ -100,6 +101,103 @@ async function loadOverview(){
  }catch(e){root.textContent='No se pudieron cargar los indicadores: '+e.message;msg(e.message,'error')}
 }
 $('#refreshOverview').addEventListener('click',loadOverview);
+let adminAccessCache=[],adminExtensionCache=[];
+async function refreshAdminData(){
+ try{[adminAccessCache,adminExtensionCache]=await Promise.all([api('/api/admin/accesses'),api('/api/admin/extensions')]);renderMatrix();renderAlerts();refreshGlobalSearch()}catch(e){msg('No se pudieron actualizar los datos administrativos: '+e.message,'error')}
+ const bulk=$('#bulkEmployee'),previous=bulk.value;bulk.replaceChildren(new Option('Seleccioná un funcionario',''));
+ for(const u of employeeCache.filter(x=>x.role!=='admin'&&x.active))bulk.append(new Option(u.name+' — '+u.email,String(u.id)));
+ if(previous)bulk.value=previous;
+}
+function openEmployeeProfile(u){
+ const current=employeeCache.find(x=>String(x.id)===String(u.id))||u;
+ const accesses=adminAccessCache.filter(a=>String(a.employee_id)===String(u.id));
+ const ext=adminExtensionCache.find(e=>String(e.id)===String(u.id));
+ dialogBody.replaceChildren();$('#dialogTitle').textContent='Ficha de '+current.name;
+ const wrap=document.createElement('div');wrap.className='profile-card';
+ wrap.append(node('p','Correo: '+current.email),node('p','Estado: '+(current.active?'Activo':'Inactivo')),node('p','Accesos asignados: '+accesses.length));
+ wrap.append(node('p',ext?.expires?'Vinculación hasta: '+new Date(ext.expires).toLocaleString('es-UY'):'Sin vinculación vigente'));
+ wrap.append(node('p','Versión reportada: '+(ext?.version||'Sin reporte')));
+ const heading=node('h3','Plataformas asignadas');wrap.append(heading);
+ if(!accesses.length)wrap.append(node('p','Sin accesos asignados.'));
+ for(const a of accesses){const line=node('p',a.title+' · '+a.username);wrap.append(line)}
+ const actions=document.createElement('div');actions.className='profile-actions';
+ const edit=node('button','Editar funcionario');edit.type='button';edit.onclick=()=>{closeDialog();editEmployee(current)};
+ const view=node('button','Administrar accesos');view.type='button';view.className='secondary';view.onclick=async()=>{closeDialog();showAdminTab('edit');await managedAccesses(undefined,String(current.id))};
+ actions.append(edit,view);wrap.append(actions);dialogBody.append(wrap);dialog.showModal();
+}
+function renderMatrix(){
+ const root=$('#accessMatrix');root.replaceChildren();
+ const people=employeeCache.filter(x=>x.role!=='admin');
+ const titles=[...new Set(adminAccessCache.map(a=>a.title.trim()))].sort((a,b)=>a.localeCompare(b));
+ if(!people.length||!titles.length){root.textContent='No hay asignaciones para mostrar.';return}
+ const table=document.createElement('table');table.className='matrix-table';
+ const head=document.createElement('tr');head.append(node('th','Funcionario'));
+ for(const title of titles)head.append(node('th',title));table.append(head);
+ for(const u of people){const tr=document.createElement('tr');tr.append(node('th',u.name));
+  for(const title of titles){const count=adminAccessCache.filter(a=>String(a.employee_id)===String(u.id)&&a.title.trim()===title).length;
+   const cell=node('td',count?'✓ '+count:'—');cell.className=count?'matrix-yes':'matrix-no';tr.append(cell)}
+  table.append(tr)}
+ root.append(table);
+}
+function renderAlerts(){
+ const root=$('#adminAlerts');root.replaceChildren();
+ const now=Date.now(),seen=new Set(),alerts=[];
+ for(const u of employeeCache.filter(x=>x.role!=='admin')){
+  const own=adminAccessCache.filter(a=>String(a.employee_id)===String(u.id));
+  if(u.active&&!own.length)alerts.push(['Sin accesos',u.name+' ('+u.email+') no tiene plataformas asignadas.']);
+  const ext=adminExtensionCache.find(e=>String(e.id)===String(u.id));
+  if(ext?.expires){const left=new Date(ext.expires).getTime()-now;if(left>0&&left<=7*86400000)alerts.push(['Vinculación próxima a vencer',u.name+' vence el '+new Date(ext.expires).toLocaleDateString('es-UY')+'.'])}
+  for(const a of own){const key=[a.title.toLowerCase().trim(),a.url.toLowerCase().trim(),a.username.toLowerCase().trim()].join('|');if(seen.has(u.id+'|'+key))alerts.push(['Posible duplicado',u.name+' tiene más de una asignación de '+a.title+'.']);seen.add(u.id+'|'+key)}
+ }
+ if(!alerts.length){root.append(node('p','No hay alertas detectadas.'));return}
+ for(const [title,description] of alerts){const row=document.createElement('div');row.className='alert-item';row.append(node('strong',title),node('p',description));root.append(row)}
+}
+$('#refreshAlerts').onclick=refreshAdminData;
+async function loadAudit(){
+ const root=$('#auditEntries');root.textContent='Cargando…';
+ try{const rows=await api('/api/admin/audit');root.replaceChildren();if(!rows.length){root.textContent='Todavía no hay eventos registrados.';return}
+ const table=document.createElement('table');table.className='matrix-table';
+ const head=document.createElement('tr');for(const x of ['Fecha','Administrador','Acción','Referencia'])head.append(node('th',x));table.append(head);
+ for(const a of rows){const tr=document.createElement('tr');for(const x of [new Date(a.created_at).toLocaleString('es-UY'),a.actor||'Cuenta eliminada',a.action,a.target])tr.append(node('td',String(x)));table.append(tr)}root.append(table)
+ }catch(e){root.textContent='Error: '+e.message}
+}
+$('#refreshAudit').onclick=loadAudit;
+function addBulkRow(){
+ const root=$('#bulkRows');if(root.children.length>=20){msg('Máximo 20 plataformas','error');return}
+ const row=document.createElement('div');row.className='bulk-row';
+ const preset=document.createElement('select');preset.append(new Option('Seleccionar plataforma',''));
+ for(const title of Object.keys(platformUrls))preset.append(new Option(title,title));
+ const title=document.createElement('input');title.placeholder='Nombre de plataforma';title.required=true;
+ const url=document.createElement('input');url.type='url';url.placeholder='https://...';url.required=true;
+ const username=document.createElement('input');username.placeholder='Usuario';username.required=true;
+ const password=document.createElement('input');password.type='password';password.placeholder='Contraseña';password.required=true;
+ preset.onchange=()=>{title.value=preset.value;url.value=platformUrls[preset.value]||''};
+ const remove=node('button','Quitar');remove.type='button';remove.className='secondary';remove.onclick=()=>row.remove();
+ for(const el of [preset,title,url,username,password,remove])row.append(el);
+ root.append(row);
+}
+$('#bulkAddRow').onclick=addBulkRow;addBulkRow();
+$('#bulkAccessForm').onsubmit=async e=>{
+ e.preventDefault();const rows=[...document.querySelectorAll('#bulkRows .bulk-row')];
+ const accesses=rows.map(row=>{const els=row.querySelectorAll('input');return {title:els[0].value,url:els[1].value,username:els[2].value,password:els[3].value}});
+ const button=e.target.querySelector('[type=submit]');button.disabled=true;
+ try{const r=await post('/api/admin/accesses/bulk',{employee_id:$('#bulkEmployee').value,accesses});
+ $('#bulkRows').replaceChildren();addBulkRow();msg(r.count+' accesos asignados','success');await managedAccesses();await loadOverview();await refreshAdminData();await loadAudit()
+ }catch(err){msg(err.message,'error')}finally{button.disabled=false}
+};
+function refreshGlobalSearch(){
+ const input=$('#globalSearch'),root=$('#globalResults'),q=input.value.trim().toLowerCase();root.replaceChildren();
+ if(q.length<2){root.classList.add('hidden');return}
+ const people=employeeCache.filter(u=>(u.name+' '+u.email).toLowerCase().includes(q)).slice(0,8);
+ const platforms=adminAccessCache.filter(a=>(a.title+' '+a.username+' '+a.employee_name).toLowerCase().includes(q)).slice(0,8);
+ for(const u of people){const b=node('button','Funcionario: '+u.name+' · '+u.email);b.type='button';b.onclick=()=>{root.classList.add('hidden');openEmployeeProfile(u)};root.append(b)}
+ for(const a of platforms){const b=node('button','Acceso: '+a.title+' · '+a.employee_name);b.type='button';b.onclick=async()=>{root.classList.add('hidden');showAdminTab('edit');await managedAccesses(String(a.id),String(a.employee_id))};root.append(b)}
+ if(!root.children.length)root.append(node('p','Sin resultados.'));
+ root.classList.remove('hidden');
+}
+$('#globalSearch').addEventListener('input',refreshGlobalSearch);
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'&&!$('#admin').classList.contains('hidden')){e.preventDefault();$('#globalSearch').focus()}if(e.key==='Escape')$('#globalResults').classList.add('hidden')});
+
 document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>showAdminTab(b.dataset.goTab)));
 const dialog=$('#adminDialog'),dialogBody=$('#dialogBody');
 const formHomes=new Map();
@@ -133,7 +231,7 @@ function editEmployee(u){
  form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{
   const data=Object.fromEntries(new FormData(form));if(!data.password)delete data.password;
   await api('/api/admin/users/'+u.id,{method:'PATCH',body:JSON.stringify(data)});
-  closeDialog();await users();await loadOverview();msg('Funcionario actualizado','success');
+  closeDialog();await users();await loadOverview();await refreshAdminData();msg('Funcionario actualizado','success');
  }catch(err){msg(err.message,'error')}finally{save.disabled=false}};
  dialogBody.append(form);dialog.showModal();
 }
@@ -245,7 +343,7 @@ $('#loginForm').onsubmit=async e=>{e.preventDefault();try{await post('/api/login
 $('#pairExtension').onclick=async()=>{try{const r=await post('/api/extension/pair',{});$('#pairCode').textContent=r.code;$('#pairResult').classList.remove('hidden');msg('Código generado. Vence en 5 minutos.')}catch(e){msg(e.message)}};
 $('#copyPairCode').onclick=()=>navigator.clipboard.writeText($('#pairCode').textContent).then(()=>msg('Código copiado')).catch(()=>msg('Seleccioná y copiá el código manualmente'));
 $('#logout').onclick=async()=>{await post('/api/logout',{});location.reload()};
-$('#newUser').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{await post('/api/users',data);e.target.reset();closeDialog();msg('Funcionario creado','success');await users();await loadOverview()}catch(err){if(err.status===409){showAdminTab('people');$('#userSearch').value=data.email.trim().toLowerCase();await users();const match=[...document.querySelectorAll('#users .user')].find(row=>row.dataset.email===data.email.trim().toLowerCase());if(match){msg('Este correo ya está registrado. Encontré el funcionario existente y lo mostré en la lista.')}else{msg('El correo ya existe en la base de datos, pero no aparece en el listado. Verificá que estés usando la misma base de datos y consultá al administrador.')}}else msg(err.message)}};
+$('#newUser').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{await post('/api/users',data);e.target.reset();closeDialog();msg('Funcionario creado','success');await users();await loadOverview();await refreshAdminData()}catch(err){if(err.status===409){showAdminTab('people');$('#userSearch').value=data.email.trim().toLowerCase();await users();const match=[...document.querySelectorAll('#users .user')].find(row=>row.dataset.email===data.email.trim().toLowerCase());if(match){msg('Este correo ya está registrado. Encontré el funcionario existente y lo mostré en la lista.')}else{msg('El correo ya existe en la base de datos, pero no aparece en el listado. Verificá que estés usando la misma base de datos y consultá al administrador.')}}else msg(err.message)}};
 
 const platformUrls={
  'CRM MONETY':'https://crm.monetytrade.com/',
@@ -266,5 +364,5 @@ $('#platformPreset').addEventListener('change',e=>{
  $('#newAccess').elements.url.value=platformUrls[name]||'';syncVoiceSpinLabels();
 });
 $('#newAccessPasswordEye').onclick=()=>{const el=$('#newAccessPassword');const show=el.type==='password';el.type=show?'text':'password';$('#newAccessPasswordEye').textContent=show?'Ocultar':'👁 Mostrar'};
-$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);const selectedEmployee=d.userId;e.target.reset();$('#userId').value=selectedEmployee;$('#newAccessPassword').type='password';$('#newAccessPasswordEye').textContent='👁 Mostrar';syncVoiceSpinLabels();closeDialog();msg('Acceso asignado. Funcionario seleccionado conservado.','success');await managedAccesses(undefined,selectedEmployee);await loadOverview()}catch(err){msg(err.message)}};
+$('#newAccess').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await post('/api/users/'+d.userId+'/accesses',d);const selectedEmployee=d.userId;e.target.reset();$('#userId').value=selectedEmployee;$('#newAccessPassword').type='password';$('#newAccessPasswordEye').textContent='👁 Mostrar';syncVoiceSpinLabels();closeDialog();msg('Acceso asignado. Funcionario seleccionado conservado.','success');await managedAccesses(undefined,selectedEmployee);await loadOverview();await refreshAdminData()}catch(err){msg(err.message)}};
 load();
