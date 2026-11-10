@@ -14,6 +14,16 @@ Portal corporativo para administrar los accesos de los funcionarios a plataforma
 - **Reporte de versión al autenticar:** desde v1.3.3 la extensión incluye `X-LANSEL-Extension-Version` en sus solicitudes autenticadas. Al consultar `GET /api/extension/me`, el servidor valida el token y registra versión y última conexión en `extension_tokens`.
 - **Autocompletado VoiceSpin:** el campo **Agent** y el campo **Extension** reciben el mismo número de usuario de cuatro dígitos; **Extension Secret** recibe la contraseña asignada. Los formularios externos pueden cambiar y requieren validación real.
 
+## Mejoras del panel web (sin actualizar la extensión)
+
+El panel de administración incorpora **Resumen**, **Asignar acceso**, **Editar accesos**, **Funcionarios** y **Extensiones**. El resumen muestra totales de funcionarios, cuentas activas e inactivas, accesos asignados y vinculaciones vigentes, obtenidos de los endpoints administrativos existentes. Se puede actualizar manualmente.
+
+En **Funcionarios** hay una tabla con búsqueda por nombre o correo, filtros por estado, activación/desactivación y acceso a las plataformas del empleado. El administrador puede editar nombre, correo y opcionalmente restablecer la contraseña. **Si restablece la contraseña, se invalidan las sesiones y vinculaciones de ese funcionario por seguridad**, por lo que deberá vincular la extensión nuevamente; editar solo el nombre o correo no produce ese efecto.
+
+La creación de funcionarios, la asignación de accesos y la edición de credenciales se realizan en **ventanas modales**, sin desplazarse por toda la página. Los avisos se muestran como notificaciones flotantes.
+
+**Compatibilidad:** estos cambios son exclusivos de la web y su API administrativa. La extensión continúa en **v1.3.3** y **no necesita descarga ni reinstalación** para utilizarlos.
+
 ## Funcionalidades
 
 | Funcionario | Administrador |
