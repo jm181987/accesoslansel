@@ -176,7 +176,7 @@ function addBulkRow(){
  for(const el of [preset,title,url,username,password,remove])row.append(el);
  root.append(row);
 }
-$('#bulkAddRow').onclick=addBulkRow;addBulkRow();
+$('#bulkAddRow').onclick=addBulkRow;
 $('#bulkAccessForm').onsubmit=async e=>{
  e.preventDefault();const rows=[...document.querySelectorAll('#bulkRows .bulk-row')];
  const accesses=rows.map(row=>{const els=row.querySelectorAll('input');return {title:els[0].value,url:els[1].value,username:els[2].value,password:els[3].value}});
@@ -356,6 +356,7 @@ const platformUrls={
  'FEROZO':'https://ferozo.email/',
  'COMIDAS LANSEL':'https://comidalansel.vercel.app/'
 };
+addBulkRow();
 function syncVoiceSpinLabels(){const isVoiceSpin=$('#platformTitle').value.trim().toUpperCase()==='VOICESPIN';$('#newAccessUsernameLabel').firstChild.textContent=isVoiceSpin?'Agente / Extensión':'Usuario';$('#newAccessPasswordLabel').firstChild.textContent=isVoiceSpin?'Extension Secret':'Contraseña';if(isVoiceSpin){$('#newAccessUsername').placeholder='Ej.: 2797';$('#newAccessPassword').placeholder='Aa123456!';}else{$('#newAccessUsername').placeholder='';$('#newAccessPassword').placeholder='';}}
 $('#platformTitle').addEventListener('input',syncVoiceSpinLabels);
 $('#platformPreset').addEventListener('change',e=>{
