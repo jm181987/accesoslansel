@@ -49,3 +49,17 @@ header{position:relative;z-index:2;display:flex;align-items:center;justify-conte
 /* Los formularios se abren únicamente desde sus botones modales */
 #admin > .panel #newUser,#admin > .panel #newAccess{display:none}
 #adminDialog #newUser,#adminDialog #newAccess{display:block}
+
+/* Herramientas administrativas avanzadas */
+.global-search-wrap{position:relative;margin:18px 0}.global-search-wrap>label{display:block;font-size:13px;margin-bottom:8px;color:var(--muted)}
+#globalSearch{width:100%;max-width:760px}.global-results{position:absolute;z-index:30;left:0;top:100%;width:min(760px,100%);max-height:340px;overflow:auto;background:#15243a;border:1px solid #46637b;border-radius:12px;box-shadow:0 20px 45px rgba(0,0,0,.5);padding:8px}
+.global-results button{display:block;width:100%;margin:2px 0;text-align:left;background:transparent;box-shadow:none;color:var(--text);padding:11px;border:0}.global-results button:hover{background:#263d55}
+.matrix-scroll{max-width:100%;overflow:auto;margin-top:16px}.matrix-table{width:100%;border-collapse:collapse;min-width:540px;font-size:13px}
+.matrix-table th,.matrix-table td{padding:12px 14px;border:1px solid var(--line);text-align:left;white-space:nowrap}
+.matrix-table th{background:#182b43;color:#c3e8ed}.matrix-yes{color:#6ee8c7;font-weight:700}.matrix-no{color:#7f8ea7}
+.alert-item{padding:15px 18px;margin-top:12px;border:1px solid rgba(246,183,99,.28);border-left:4px solid #f4bc78;border-radius:11px;background:rgba(200,128,46,.07)}
+.alert-item strong{color:#f6c58b}.alert-item p{margin:7px 0 0;font-size:13px;color:var(--muted)}
+.bulk-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0;padding:16px;border:1px solid var(--line);border-radius:12px;background:rgba(7,17,33,.5)}
+.bulk-row>*{min-width:0}.bulk-actions,.profile-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.profile-card p{overflow-wrap:anywhere;margin:12px 0}.profile-card h3{margin:24px 0 10px}
+@media(max-width:650px){.bulk-row{grid-template-columns:1fr}.global-results{max-height:260px}}
