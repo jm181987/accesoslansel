@@ -131,7 +131,7 @@ app.post('/api/extension/revoke',extensionAuth,run(async(req,res)=>{
  res.json({ok:true});
 }));
 app.get('/api/users',auth,admin,run(async(req,res)=>{const r=await db.query('SELECT id,name,email,role,active FROM employees ORDER BY name');res.json(r.rows)}));
-app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES($1,$2,$3,'user') RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12)]);res.status(201).json(r.rows[0])}));
+app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role) VALUES($1,$2,$3,'user') RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12)]);await audit(req.user.id,'user.create',r.rows[0].id,{email:r.rows[0].email});res.status(201).json(r.rows[0])}));
 app.patch('/api/admin/users/:id',auth,admin,run(async(req,res)=>{
  const id=String(req.params.id);
  if(!/^\d+$/.test(id))return res.status(400).json({error:'Funcionario inválido'});
@@ -149,7 +149,7 @@ app.patch('/api/admin/users/:id',auth,admin,run(async(req,res)=>{
  res.set('Cache-Control','no-store').json(updated.rows[0]);
 }));
 
-app.post('/api/users/:id/accesses',auth,admin,run(async(req,res)=>{const {title,url,username,password}=req.body;let u;try{u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error()}catch{return res.status(400).json({error:'URL inválida'})}if(!title?.trim()||!username?.trim()||!password)return res.status(400).json({error:'Completá los campos'});const existing=await db.query('SELECT id FROM accesses WHERE employee_id=$1 AND lower(trim(title))=lower($2) AND lower(trim(username))=lower($3) AND url=$4 LIMIT 1',[req.params.id,title.trim(),username.trim(),u.href]);if(existing.rowCount)return res.status(409).json({error:'Este acceso ya está asignado al funcionario. Editá el registro existente en lugar de duplicarlo'});const r=await db.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5) RETURNING id,title,url,username',[req.params.id,title.trim(),u.href,username.trim(),enc(password)]);await audit(req.user.id,'access.create',r.rows[0].id,{employee_id:req.params.id,title:title.trim()});res.status(201).json(r.rows[0])}));
+app.post('/api/users/:id/accesses',auth,admin,run(async(req,res)=>{const {title,url,username,password}=req.body;let u;try{u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error()}catch{return res.status(400).json({error:'URL inválida'})}if(!title?.trim()||!username?.trim()||!password)return res.status(400).json({error:'Completá los campos'});const existing=await db.query('SELECT id FROM accesses WHERE employee_id=$1 AND lower(trim(title))=lower($2) AND lower(trim(username))=lower($3) AND url=$4 LIMIT 1',[req.params.id,title.trim(),username.trim(),u.href]);if(existing.rowCount)return res.status(409).json({error:'Este acceso ya está asignado al funcionario. Editá el registro existente en lugar de duplicarlo'});const r=await db.query('INSERT INTO accesses(employee_id,title,url,username,secret) VALUES($1,$2,$3,$4,$5) RETURNING id,title,url,username',[req.params.id,title.trim(),u.href,username.trim(),enc(password)]);await audit(req.user.id,'access.create',r.rows[0].id,{employee_id:req.params.id,title:title.trim()});await audit(req.user.id,'access.create',r.rows[0].id,{employee_id:req.params.id,title:title.trim()});res.status(201).json(r.rows[0])}));
 
 // Auditoría administrativa: solo metadatos, nunca credenciales ni tokens.
 async function audit(actor,action,target,details={}){await db.query('INSERT INTO admin_audit(actor_id,action,target,details) VALUES($1,$2,$3,$4)',[actor,action,String(target),JSON.stringify(details)]);}
@@ -159,7 +159,7 @@ app.get('/api/admin/audit',auth,admin,run(async(req,res)=>{
 }));
 app.post('/api/admin/accesses/bulk',auth,admin,run(async(req,res)=>{
  const {employee_id,accesses}=req.body||{};
- if(!/^\\d+$/.test(String(employee_id||''))||!Array.isArray(accesses)||accesses.length<1||accesses.length>20)return res.status(400).json({error:'Seleccioná un funcionario y entre 1 y 20 accesos'});
+ if(!/^\d+$/.test(String(employee_id||''))||!Array.isArray(accesses)||accesses.length<1||accesses.length>20)return res.status(400).json({error:'Seleccioná un funcionario y entre 1 y 20 accesos'});
  const employee=await db.query("SELECT id FROM employees WHERE id=$1 AND role='user' AND active=true",[employee_id]);
  if(!employee.rowCount)return res.status(404).json({error:'Funcionario no encontrado o inactivo'});
  const prepared=[];
