@@ -103,6 +103,8 @@ $('#refreshOverview').addEventListener('click',loadOverview);
 document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>showAdminTab(b.dataset.goTab)));
 const dialog=$('#adminDialog'),dialogBody=$('#dialogBody');
 const formHomes=new Map();
+let editorHome=null;
+function openEditorModal(form){editorHome=form.parentNode;dialogBody.replaceChildren();dialogBody.append(form);$('#dialogTitle').textContent='Editar acceso';if(!dialog.open)dialog.showModal();}
 function openFormModal(id,title){
  const form=$('#'+id);if(!form)return;
  if(!formHomes.has(id))formHomes.set(id,{parent:form.parentNode,next:form.nextSibling});
@@ -114,6 +116,7 @@ function openFormModal(id,title){
 function closeDialog(){
  if(dialog.open)dialog.close();
  for(const [id,home] of formHomes){const form=$('#'+id);if(form&&form.parentNode===dialogBody)home.parent.insertBefore(form,home.next)}
+ if(editorHome){const form=dialogBody.querySelector('.managed-access');if(form)editorHome.append(form);editorHome=null}
  dialogBody.replaceChildren();
 }
 $('#dialogClose').addEventListener('click',closeDialog);
@@ -213,7 +216,7 @@ async function managedAccesses(selectedId, preferredEmployeeId){
    }catch(err){feedback.textContent='Error: '+err.message}
    finally{save.disabled=false}
   });
-  editor.append(form);
+  const open=node('button','Editar acceso en ventana');open.type='button';open.className='secondary';open.onclick=()=>openEditorModal(form);editor.append(open,form);form.classList.add('hidden');
  }
  function updatePlatforms(preferred){
   accessSelect.replaceChildren(new Option('Elegí una plataforma',''));
