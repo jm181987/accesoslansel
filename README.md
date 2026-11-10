@@ -24,6 +24,19 @@ La creación de funcionarios, la asignación de accesos y la edición de credenc
 
 **Compatibilidad:** estos cambios son exclusivos de la web y su API administrativa. La extensión continúa en **v1.3.3** y **no necesita descarga ni reinstalación** para utilizarlos.
 
+## Administración avanzada del panel web
+
+Estas funciones no modifican la extensión Chrome/Edge (**permanece en v1.3.3**) ni requieren reinstalarla:
+
+1. **Ficha del funcionario:** información de la cuenta, accesos asignados, versión reportada y vencimiento de la vinculación, con acciones para editar y administrar accesos.
+2. **Matriz de accesos:** tabla de funcionarios y plataformas asignadas, sin mostrar contraseñas.
+3. **Centro de alertas:** detección de funcionarios activos sin accesos, vinculaciones que vencen en los próximos siete días y posibles accesos duplicados. Las alertas se calculan al consultar el panel; no se envían notificaciones automáticas.
+4. **Asignación múltiple:** permite agregar hasta 20 accesos por operación. Se valida el lote y se guarda en una transacción: si un acceso es duplicado, no se aplica el lote.
+5. **Auditoría administrativa:** registra cambios de funcionarios, credenciales, estados y revocaciones a partir de la actualización. Guarda metadatos, nunca contraseñas ni tokens. El historial está limitado a los 150 eventos más recientes en la vista.
+6. **Búsqueda global:** localiza funcionarios, correos y accesos desde el panel; admite el atajo **Ctrl+K** (o **Cmd+K**).
+
+**Nota de seguridad:** cambiar la contraseña de inicio de sesión de un funcionario revoca sus sesiones y vinculaciones existentes. Las demás acciones de consulta y visualización no afectan a la extensión.
+
 ## Funcionalidades
 
 | Funcionario | Administrador |
