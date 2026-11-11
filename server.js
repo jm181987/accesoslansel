@@ -138,7 +138,7 @@ app.post('/api/extension/revoke',extensionAuth,run(async(req,res)=>{
  res.json({ok:true});
 }));
 app.get('/api/users',auth,admin,run(async(req,res)=>{const r=await db.query('SELECT id,name,email,role,active,company_id FROM employees WHERE true'+tenantWhere(req)+' ORDER BY name');res.json(r.rows)}));
-app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role,company_id) VALUES($1,$2,$3,'user',$4) RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12),tenant(req)||req.user.company_id||1]);await audit(req.user.id,'user.create',r.rows[0].id,{email:r.rows[0].email});res.status(201).json(r.rows[0])}));
+app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;if(req.user.role==='superadmin'&&!tenant(req))return res.status(400).json({error:'Seleccioná una empresa antes de crear funcionarios'});if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role,company_id) VALUES($1,$2,$3,'user',$4) RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12),tenant(req)||req.user.company_id||1]);await audit(req.user.id,'user.create',r.rows[0].id,{email:r.rows[0].email});res.status(201).json(r.rows[0])}));
 app.patch('/api/admin/users/:id',auth,admin,run(async(req,res)=>{
  const id=String(req.params.id);
  if(!/^\d+$/.test(id))return res.status(400).json({error:'Funcionario inválido'});
@@ -224,6 +224,10 @@ await db.query("CREATE TABLE IF NOT EXISTS employees(id BIGSERIAL PRIMARY KEY,na
 await db.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS company_id BIGINT REFERENCES companies(id)');
 await db.query('UPDATE employees SET company_id=1 WHERE company_id IS NULL');
 await db.query('ALTER TABLE employees ALTER COLUMN company_id SET NOT NULL');
+await db.query('CREATE INDEX IF NOT EXISTS employees_company_idx ON employees(company_id)');
+await db.query('CREATE INDEX IF NOT EXISTS accesses_employee_idx ON accesses(employee_id)');
+// Migración única: los administradores preexistentes eran globales.
+await db.query("UPDATE employees SET role='superadmin' WHERE role='admin' AND company_id=1 AND NOT EXISTS(SELECT 1 FROM employees WHERE role='superadmin') AND NOT EXISTS(SELECT 1 FROM companies WHERE id<>1)");
 await db.query("CREATE TABLE IF NOT EXISTS accesses(id BIGSERIAL PRIMARY KEY,employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,title TEXT NOT NULL,url TEXT NOT NULL,username TEXT NOT NULL,secret TEXT NOT NULL)");
 await db.query("CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
 await db.query("CREATE TABLE IF NOT EXISTS extension_pair_codes(code TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL)");
