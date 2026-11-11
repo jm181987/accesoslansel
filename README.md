@@ -1,13 +1,13 @@
 ## Empresa de los funcionarios
 
-El formulario **Crear funcionario** exige seleccionar una empresa. El listado **Funcionarios** muestra una columna **Empresa**. El superadministrador puede cambiar la empresa desde **Editar funcionario**; un administrador de empresa solo puede consultar y administrar usuarios de su propia empresa. Los usuarios existentes permanecen en **LANSEL Principal**. Cambiar la empresa de un funcionario invalida sus sesiones y tokens de extensión, pero conserva las asignaciones de acceso; debe volver a vincular su extensión. La extensión v1.3.3 no necesita actualizarse.
+El formulario **Crear funcionario** exige seleccionar una empresa. El listado **Funcionarios** muestra una columna **Empresa**. El superadministrador puede cambiar la empresa desde **Editar funcionario**; un administrador de empresa solo puede consultar y administrar usuarios de su propia empresa. Los usuarios existentes permanecen en **LANSEL**. Cambiar la empresa de un funcionario invalida sus sesiones y tokens de extensión, pero conserva las asignaciones de acceso; debe volver a vincular su extensión. La extensión v1.3.3 no necesita actualizarse.
 
 ## Multiempresa / multisucursal
 
 - El panel administrativo incluye **Empresas** (solo superadministrador) para crear empresas y administradores de empresa.
 - El superadministrador puede visualizar todas las empresas o seleccionar una en **Empresa activa**. Para crear funcionarios debe seleccionar una empresa.
 - Los administradores de empresa solo pueden consultar y gestionar funcionarios, asignaciones, códigos de vinculación y extensiones de su propia empresa.
-- Las cuentas existentes se migran a **LANSEL Principal**; el administrador global existente pasa a superadministrador durante la migración inicial.
+- Las cuentas existentes se migran a **LANSEL**; el administrador global existente pasa a superadministrador durante la migración inicial.
 - Los funcionarios conservan su inicio de sesión y sus vinculaciones existentes. La extensión Chrome/Edge **1.3.3 no cambia**: continúa consumiendo los endpoints actuales filtrados por usuario.
 - El correo de inicio de sesión continúa siendo único globalmente entre empresas.
 - **Antes de producción:** validar migración en copia de la base de datos, pruebas de aislamiento entre empresas y de vinculación con la extensión 1.3.3. No se han ejecutado pruebas de integración contra la base de producción.
