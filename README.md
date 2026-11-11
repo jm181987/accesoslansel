@@ -1,3 +1,13 @@
+## Multiempresa / multisucursal
+
+- El panel administrativo incluye **Empresas** (solo superadministrador) para crear empresas y administradores de empresa.
+- El superadministrador puede visualizar todas las empresas o seleccionar una en **Empresa activa**. Para crear funcionarios debe seleccionar una empresa.
+- Los administradores de empresa solo pueden consultar y gestionar funcionarios, asignaciones, códigos de vinculación y extensiones de su propia empresa.
+- Las cuentas existentes se migran a **LANSEL Principal**; el administrador global existente pasa a superadministrador durante la migración inicial.
+- Los funcionarios conservan su inicio de sesión y sus vinculaciones existentes. La extensión Chrome/Edge **1.3.3 no cambia**: continúa consumiendo los endpoints actuales filtrados por usuario.
+- El correo de inicio de sesión continúa siendo único globalmente entre empresas.
+- **Antes de producción:** validar migración en copia de la base de datos, pruebas de aislamiento entre empresas y de vinculación con la extensión 1.3.3. No se han ejecutado pruebas de integración contra la base de producción.
+
 ### Módulo «Mi espacio» del administrador
 
 En las cuentas administradoras, **Extensión Chrome / Edge** (generación de código propio) y **Mis accesos privados** se agrupan en la pestaña **Mi espacio** del panel de administración, en vez de aparecer por encima del panel. Para los funcionarios normales se mantienen en la página habitual. No cambian las rutas de API ni la extensión del navegador (v1.3.3).
