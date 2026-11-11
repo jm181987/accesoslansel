@@ -476,21 +476,20 @@ async function refreshPlatformCatalog(){
  for(const key of Object.keys(platformUrls))delete platformUrls[key];Object.assign(platformUrls,defaultPlatformUrls);
  for(const opt of [...preset.options])if(opt.dataset.custom==='true')opt.remove();
  for(const [name,url] of Object.entries(platformUrls))if(![...preset.options].some(o=>o.value===name)){const opt=new Option(name,name);opt.dataset.custom='true';preset.append(opt)}
- if(activeCompanyId||currentAdminRole!=='superadmin'){
+ {
   const rows=await api('/api/admin/platforms');
   for(const p of rows){platformUrls[p.name]=p.url;if(![...preset.options].some(o=>o.value===p.name)){const opt=new Option(p.name,p.name);opt.dataset.custom='true';preset.append(opt)}}
  }
  preset.value=[...preset.options].some(o=>o.value===old)?old:'';
 }
 $('#addPlatformButton').onclick=()=>{
- if(currentAdminRole==='superadmin'&&!activeCompanyId){msg('Seleccioná primero una empresa activa','error');return}
  const dialog=document.createElement('dialog');dialog.className='admin-dialog';
  const form=document.createElement('form');form.className='employee-edit-form';
  const heading=node('h2','Agregar plataforma');form.append(heading);
  const nameLabel=document.createElement('label');nameLabel.textContent='Nombre de plataforma';const nameInput=document.createElement('input');nameInput.required=true;nameInput.maxLength=120;nameLabel.append(nameInput);
  const urlLabel=document.createElement('label');urlLabel.textContent='Enlace HTTPS';const urlInput=document.createElement('input');urlInput.type='url';urlInput.required=true;urlInput.placeholder='https://...';urlLabel.append(urlInput);
  const actions=document.createElement('div');actions.className='employee-actions';const cancel=node('button','Cancelar');cancel.type='button';cancel.className='secondary';cancel.onclick=()=>dialog.close();const save=node('button','Guardar plataforma');save.type='submit';actions.append(cancel,save);form.append(nameLabel,urlLabel,actions);dialog.append(form);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());
- form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const name=nameInput.value.trim(),url=urlInput.value.trim();const saved=await post('/api/admin/platforms',{name,url,company_id:activeCompanyId||availableCompanies[0]?.id});await refreshPlatformCatalog();if(![...$('#platformPreset').options].some(o=>o.value===saved.name))throw Error('La plataforma se guardó, pero no aparece en el catálogo. Actualizá la página.');platformUrls[saved.name]=saved.url;$('#platformPreset').value=saved.name;$('#platformTitle').value=saved.name;$('#newAccess').elements.url.value=saved.url;syncVoiceSpinLabels();dialog.close();msg('Plataforma guardada','success')}catch(err){msg(err.message,'error')}finally{save.disabled=false}};
+ form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const name=nameInput.value.trim(),url=urlInput.value.trim();const saved=await post('/api/admin/platforms',{name,url});await refreshPlatformCatalog();if(![...$('#platformPreset').options].some(o=>o.value===saved.name))throw Error('La plataforma se guardó, pero no aparece en el catálogo. Actualizá la página.');platformUrls[saved.name]=saved.url;$('#platformPreset').value=saved.name;$('#platformTitle').value=saved.name;$('#newAccess').elements.url.value=saved.url;syncVoiceSpinLabels();dialog.close();msg('Plataforma guardada','success')}catch(err){msg(err.message,'error')}finally{save.disabled=false}};
  dialog.showModal();
 };
 function syncVoiceSpinLabels(){const isVoiceSpin=$('#platformTitle').value.trim().toUpperCase()==='VOICESPIN';$('#newAccessUsernameLabel').firstChild.textContent=isVoiceSpin?'Agente / Extensión':'Usuario';$('#newAccessPasswordLabel').firstChild.textContent=isVoiceSpin?'Extension Secret':'Contraseña';if(isVoiceSpin){$('#newAccessUsername').placeholder='Ej.: 2797';$('#newAccessPassword').placeholder='Aa123456!';}else{$('#newAccessUsername').placeholder='';$('#newAccessPassword').placeholder='';}}
