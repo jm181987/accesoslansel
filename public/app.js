@@ -18,6 +18,7 @@ let activeCompanyId='';
 let availableCompanies=[];
 let currentAdminRole='user';
 const companyName=id=>availableCompanies.find(c=>String(c.id)===String(id))?.name||'Empresa #'+id;
+function updateBrandCompany(){const company=availableCompanies.find(c=>String(c.id)===String(activeCompanyId))||(currentAdminRole!=='superadmin'?availableCompanies[0]:null);const name=company?.name||'LANSEL';$('#brandCompanyName').textContent=name;document.title=name+' ACCESS';}
 function syncNewUserCompany(){const el=$('#newUserCompany');if(!el)return;const old=el.value;el.replaceChildren();if(currentAdminRole==='superadmin'){el.append(new Option('Seleccionar empresa…',''));for(const c of availableCompanies.filter(c=>c.active))el.append(new Option(c.name,String(c.id)));el.value=activeCompanyId||old||'';}else{for(const c of availableCompanies)el.append(new Option(c.name,String(c.id)));el.value=String(availableCompanies[0]?.id||'');el.disabled=false;}}
 
 const api=async(u,o={})=>{if(activeCompanyId&&/^\/api\/(?:admin\/|users(?:\/|$))/.test(u))u+=(u.includes('?')?'&':'?')+'company_id='+encodeURIComponent(activeCompanyId);const r=await fetch(u,{...o,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok){const err=new Error(d.error||'Error');err.status=r.status;err.details=d;throw err}return d};
@@ -27,7 +28,7 @@ async function load(){try{const me=await api('/api/me');$('#login').classList.ad
 
 async function initCompanies(me){
  const companies=await api('/api/admin/companies');
- availableCompanies=companies;currentAdminRole=me.role;syncNewUserCompany();
+ availableCompanies=companies;currentAdminRole=me.role;syncNewUserCompany();updateBrandCompany();
  const bar=$('#companyScopeBar'),scope=$('#companyScope');
  bar.classList.remove('hidden');
  $('#companiesTab').classList.toggle('hidden',me.role!=='superadmin');
@@ -42,7 +43,7 @@ async function initCompanies(me){
   scope.disabled=true;
  }
  scope.value=activeCompanyId;
- scope.onchange=async()=>{activeCompanyId=scope.value;syncNewUserCompany();await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData();};
+ scope.onchange=async()=>{activeCompanyId=scope.value;syncNewUserCompany();updateBrandCompany();await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData();};
  if(me.role==='superadmin')renderCompanies(companies);
 }
 function renderCompanies(companies){
