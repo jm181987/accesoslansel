@@ -1,3 +1,7 @@
+### Módulo «Mi espacio» del administrador
+
+En las cuentas administradoras, **Extensión Chrome / Edge** (generación de código propio) y **Mis accesos privados** se agrupan en la pestaña **Mi espacio** del panel de administración, en vez de aparecer por encima del panel. Para los funcionarios normales se mantienen en la página habitual. No cambian las rutas de API ni la extensión del navegador (v1.3.3).
+
 # Accesos LANSEL
 
 Portal corporativo para administrar los accesos de los funcionarios a plataformas de trabajo. Incluye una aplicación web con roles de **administrador** y **funcionario**, y la extensión **LANSEL Access** para Chrome y Edge.
