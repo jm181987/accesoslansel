@@ -138,21 +138,24 @@ app.post('/api/extension/revoke',extensionAuth,run(async(req,res)=>{
  res.json({ok:true});
 }));
 app.get('/api/users',auth,admin,run(async(req,res)=>{const r=await db.query('SELECT id,name,email,role,active,company_id FROM employees WHERE true'+tenantWhere(req)+' ORDER BY name');res.json(r.rows)}));
-app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;if(req.user.role==='superadmin'&&!tenant(req))return res.status(400).json({error:'Seleccioná una empresa antes de crear funcionarios'});if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role,company_id) VALUES($1,$2,$3,'user',$4) RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12),tenant(req)||req.user.company_id||1]);await audit(req.user.id,'user.create',r.rows[0].id,{email:r.rows[0].email});res.status(201).json(r.rows[0])}));
+app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password}=req.body;const companyId=req.user.role==='superadmin'?Number(req.body.company_id):Number(req.user.company_id);if(!Number.isSafeInteger(companyId)||companyId<1)return res.status(400).json({error:'Seleccioná la empresa del funcionario'});const company=await db.query('SELECT id FROM companies WHERE id=$1 AND active=true',[companyId]);if(!company.rowCount)return res.status(400).json({error:'Empresa inexistente o inactiva'});if(!name?.trim()||!email?.includes('@')||typeof password!=='string'||password.length<12)return res.status(400).json({error:'Datos inválidos; contraseña mínimo 12 caracteres'});const r=await db.query("INSERT INTO employees(name,email,password_hash,role,company_id) VALUES($1,$2,$3,'user',$4) RETURNING id,name,email",[name.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12),companyId]);await audit(req.user.id,'user.create',r.rows[0].id,{email:r.rows[0].email});res.status(201).json(r.rows[0])}));
 app.patch('/api/admin/users/:id',auth,admin,run(async(req,res)=>{
  const id=String(req.params.id);
  if(!/^\d+$/.test(id))return res.status(400).json({error:'Funcionario inválido'});
- const {name,email,password}=req.body||{};
+ const {name,email,password,company_id}=req.body||{};
  if(typeof name!=='string'||!name.trim()||name.trim().length>150||typeof email!=='string'||!/^\S+@\S+\.\S+$/.test(email.trim())||email.length>254)return res.status(400).json({error:'Nombre o correo inválidos'});
  if(password!==undefined&&(typeof password!=='string'||(password.length>0&&password.length<12)||password.length>4096))return res.status(400).json({error:'La nueva contraseña debe tener al menos 12 caracteres'});
  const normalized=email.trim().toLowerCase();
- const existing=await db.query('SELECT id,role FROM employees WHERE id=$1'+tenantWhere(req),[id]);
+ const existing=await db.query('SELECT id,role,company_id FROM employees WHERE id=$1'+tenantWhere(req),[id]);
  if(!existing.rowCount)return res.status(404).json({error:'Funcionario no encontrado'});
  if(['admin','superadmin'].includes(existing.rows[0].role)&&String(req.user.id)!==id)return res.status(403).json({error:'No se permite editar otro administrador'});
+ let newCompanyId=Number(existing.rows[0].company_id);
+ if(company_id!==undefined){if(req.user.role!=='superadmin')return res.status(403).json({error:'Solo el superadministrador puede cambiar de empresa'});newCompanyId=Number(company_id);if(!Number.isSafeInteger(newCompanyId)||newCompanyId<1)return res.status(400).json({error:'Empresa inválida'});const company=await db.query('SELECT id FROM companies WHERE id=$1 AND active=true',[newCompanyId]);if(!company.rowCount)return res.status(400).json({error:'Empresa inexistente o inactiva'});}
+ const moved=newCompanyId!==Number(existing.rows[0].company_id);
  const hashed=password?await bcrypt.hash(password,12):null;
- const updated=await db.query('UPDATE employees SET name=$1,email=$2,password_hash=COALESCE($3,password_hash) WHERE id=$4 RETURNING id,name,email,role,active',[name.trim(),normalized,hashed,id]);
- if(hashed){await db.query('DELETE FROM sessions WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_tokens WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_pair_codes WHERE user_id=$1',[id]);}
- await audit(req.user.id,hashed?'user.password_reset':'user.update',id,{email:normalized});
+ const updated=await db.query('UPDATE employees SET name=$1,email=$2,password_hash=COALESCE($3,password_hash),company_id=$5 WHERE id=$4 RETURNING id,name,email,role,active,company_id',[name.trim(),normalized,hashed,id,newCompanyId]);
+ if(hashed||moved){await db.query('DELETE FROM sessions WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_tokens WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_pair_codes WHERE user_id=$1',[id]);}
+ await audit(req.user.id,moved?'user.company_change':hashed?'user.password_reset':'user.update',id,{email:normalized,company_id:newCompanyId,previous_company_id:moved?existing.rows[0].company_id:undefined});
  res.set('Cache-Control','no-store').json(updated.rows[0]);
 }));
 
