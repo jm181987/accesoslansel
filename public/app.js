@@ -71,7 +71,7 @@ async function users(){
  select.replaceChildren();pairSelect.replaceChildren();root.replaceChildren();
  const table=document.createElement('table');table.className='employee-table';
  const thead=document.createElement('thead'),tr=document.createElement('tr');
- for(const label of ['Funcionario','Correo','Empresa','Estado','Acciones'])tr.append(node('th',label));
+ for(const label of ['Funcionario','Correo','Empresa','Rol','Estado','Acciones'])tr.append(node('th',label));
  thead.append(tr);table.append(thead);
  const tbody=document.createElement('tbody');
  for(const u of list){
@@ -82,7 +82,7 @@ async function users(){
   const line=document.createElement('tr');line.className='user';
   line.dataset.email=u.email.toLowerCase();line.dataset.search=(u.name+' '+u.email).toLowerCase();
   line.dataset.active=String(u.active);
-  line.append(node('td',u.name),node('td',u.email),node('td',companyName(u.company_id)));
+  line.append(node('td',u.name),node('td',u.email),node('td',companyName(u.company_id)),node('td',u.role==='superadmin'?'Superadministrador':u.role==='admin'?'Administrador':'Funcionario'));
   const status=node('td',u.active?'Activo':'Inactivo');status.className=u.active?'employee-active':'employee-inactive';line.append(status);
   const actionCell=document.createElement('td');const actions=document.createElement('div');actions.className='employee-actions';
   if(u.role==='user'){
@@ -92,7 +92,9 @@ async function users(){
    accessesButton.onclick=async()=>{showAdminTab('edit');await managedAccesses(undefined,String(u.id))};actions.append(accessesButton);
    const toggle=node('button',u.active?'Desactivar':'Activar');toggle.type='button';toggle.className='secondary';
    toggle.onclick=async()=>{try{await api('/api/users/'+u.id+'/status',{method:'PATCH',body:JSON.stringify({active:!u.active})});await users();await loadOverview();await refreshAdminData();msg('Estado actualizado','success')}catch(e){msg(e.message,'error')}};actions.append(toggle);
-  }else actions.append(node('span','Administrador'));
+  }else if(u.role==='admin'&&currentAdminRole==='superadmin'){
+   const edit=node('button','Editar rol');edit.type='button';edit.className='secondary';edit.onclick=()=>editEmployee(u);actions.append(edit);
+  }else actions.append(node('span',u.role==='superadmin'?'Superadministrador':'Administrador'));
   actionCell.append(actions);line.append(actionCell);tbody.append(line);
  }
  table.append(tbody);root.append(table);
@@ -331,9 +333,10 @@ function editEmployee(u){
  dialogBody.replaceChildren();$('#dialogTitle').textContent='Editar funcionario';
  const form=document.createElement('form');form.className='employee-edit-form';
  if(currentAdminRole==='superadmin'){const wrap=document.createElement('label');wrap.textContent='Empresa';const sel=document.createElement('select');sel.name='company_id';sel.required=true;for(const c of availableCompanies.filter(c=>c.active))sel.append(new Option(c.name,String(c.id)));sel.value=String(u.company_id);wrap.append(sel);form.append(wrap)}else{const label=node('p','Empresa: '+companyName(u.company_id));label.className='muted';form.append(label)}
+ if(currentAdminRole==='superadmin'&&u.role!=='superadmin'){const wrap=document.createElement('label');wrap.textContent='Rol';const sel=document.createElement('select');sel.name='role';sel.append(new Option('Funcionario','user'),new Option('Administrador de empresa','admin'));sel.value=u.role;wrap.append(sel);form.append(wrap)}
  const fields=[['name','Nombre',u.name,'text'],['email','Correo',u.email,'email'],['password','Nueva contraseña (opcional)','','password']];
  for(const [name,label,value,type] of fields){const wrap=document.createElement('label');wrap.textContent=label;const input=document.createElement('input');input.name=name;input.type=type;input.value=value;input.required=name!=='password';if(name==='password'){input.minLength=12;input.autocomplete='new-password';input.placeholder='Dejar vacío para conservar la actual'}wrap.append(input);form.append(wrap)}
- const note=node('p','Cambiar la contraseña o trasladar al funcionario de empresa cerrará sus sesiones y desvinculará su extensión por seguridad.');note.className='muted';form.append(note);
+ const note=node('p','Cambiar el rol, la contraseña o la empresa cerrará sus sesiones y desvinculará su extensión por seguridad.');note.className='muted';form.append(note);
  const save=node('button','Guardar cambios');save.type='submit';form.append(save);
  form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{
   const data=Object.fromEntries(new FormData(form));if(!data.password)delete data.password;
