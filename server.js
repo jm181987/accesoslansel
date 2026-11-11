@@ -226,7 +226,8 @@ app.patch('/api/users/:id/status',auth,admin,run(async(req,res)=>{if(String(req.
 app.use((err,req,res,next)=>{console.error(err);res.status(err.code==='23505'?409:500).json({error:err.code==='23505'?'Correo ya registrado':'Error interno'})});
 async function init(){
 await db.query('CREATE TABLE IF NOT EXISTS companies(id BIGSERIAL PRIMARY KEY,name TEXT UNIQUE NOT NULL,active BOOLEAN NOT NULL DEFAULT true)');
-await db.query("INSERT INTO companies(id,name) VALUES(1,'LANSEL Principal') ON CONFLICT(id) DO NOTHING");
+await db.query("INSERT INTO companies(id,name) VALUES(1,'LANSEL') ON CONFLICT(id) DO NOTHING");
+await db.query("UPDATE companies SET name='LANSEL' WHERE id=1 AND name='LANSEL Principal'");
 await db.query("SELECT setval(pg_get_serial_sequence('companies','id'),GREATEST((SELECT MAX(id) FROM companies),1))");
 await db.query("CREATE TABLE IF NOT EXISTS employees(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL DEFAULT 'user',active BOOLEAN NOT NULL DEFAULT true)");
 await db.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS company_id BIGINT REFERENCES companies(id)');
