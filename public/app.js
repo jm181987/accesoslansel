@@ -14,7 +14,7 @@ function msg(message,type='info'){
  toastTimer=setTimeout(()=>{toast.classList.remove('show');setTimeout(()=>{if(!toast.classList.contains('show'))toast.hidden=true},250)},6500);
 }
 $('#toastClose')?.addEventListener('click',()=>{clearTimeout(toastTimer);$('#toast').classList.remove('show');$('#toast').hidden=true});
-let activeCompanyId='';
+let activeCompanyId=sessionStorage.getItem('accessCompanyId')||'';
 let availableCompanies=[];
 let currentAdminRole='user';
 const companyName=id=>availableCompanies.find(c=>String(c.id)===String(id))?.name||'Empresa #'+id;
@@ -28,7 +28,9 @@ async function load(){try{const me=await api('/api/me');$('#login').classList.ad
 
 async function initCompanies(me){
  const companies=await api('/api/admin/companies');
- availableCompanies=companies;currentAdminRole=me.role;syncNewUserCompany();updateBrandCompany();await refreshPlatformCatalog();
+ availableCompanies=companies;currentAdminRole=me.role;
+ if(me.role==='superadmin'){if(activeCompanyId&&!companies.some(c=>String(c.id)===String(activeCompanyId)))activeCompanyId='';}else activeCompanyId=String(me.company_id||companies[0]?.id||'');
+ syncNewUserCompany();updateBrandCompany();await refreshPlatformCatalog();
  const bar=$('#companyScopeBar'),scope=$('#companyScope');
  bar.classList.remove('hidden');
  $('#companiesTab').classList.toggle('hidden',me.role!=='superadmin');
@@ -43,7 +45,7 @@ async function initCompanies(me){
   scope.disabled=true;
  }
  scope.value=activeCompanyId;
- scope.onchange=async()=>{activeCompanyId=scope.value;syncNewUserCompany();updateBrandCompany();await refreshPlatformCatalog();await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData();};
+ scope.onchange=async()=>{activeCompanyId=scope.value;sessionStorage.setItem('accessCompanyId',activeCompanyId);syncNewUserCompany();updateBrandCompany();await refreshPlatformCatalog();await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData();};
  if(me.role==='superadmin')renderCompanies(companies);
 }
 function renderCompanies(companies){
@@ -488,7 +490,7 @@ $('#addPlatformButton').onclick=()=>{
  const nameLabel=document.createElement('label');nameLabel.textContent='Nombre de plataforma';const nameInput=document.createElement('input');nameInput.required=true;nameInput.maxLength=120;nameLabel.append(nameInput);
  const urlLabel=document.createElement('label');urlLabel.textContent='Enlace HTTPS';const urlInput=document.createElement('input');urlInput.type='url';urlInput.required=true;urlInput.placeholder='https://...';urlLabel.append(urlInput);
  const actions=document.createElement('div');actions.className='employee-actions';const cancel=node('button','Cancelar');cancel.type='button';cancel.className='secondary';cancel.onclick=()=>dialog.close();const save=node('button','Guardar plataforma');save.type='submit';actions.append(cancel,save);form.append(nameLabel,urlLabel,actions);dialog.append(form);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());
- form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const name=nameInput.value.trim(),url=urlInput.value.trim();await post('/api/admin/platforms',{name,url,company_id:activeCompanyId||availableCompanies[0]?.id});platformUrls[name]=url;await refreshPlatformCatalog();$('#platformPreset').value=name;$('#platformTitle').value=name;$('#newAccess').elements.url.value=url;syncVoiceSpinLabels();dialog.close();msg('Plataforma guardada','success')}catch(err){msg(err.message,'error')}finally{save.disabled=false}};
+ form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const name=nameInput.value.trim(),url=urlInput.value.trim();const saved=await post('/api/admin/platforms',{name,url,company_id:activeCompanyId||availableCompanies[0]?.id});await refreshPlatformCatalog();if(![...$('#platformPreset').options].some(o=>o.value===saved.name))throw Error('La plataforma se guardó, pero no aparece en el catálogo. Actualizá la página.');platformUrls[saved.name]=saved.url;$('#platformPreset').value=saved.name;$('#platformTitle').value=saved.name;$('#newAccess').elements.url.value=saved.url;syncVoiceSpinLabels();dialog.close();msg('Plataforma guardada','success')}catch(err){msg(err.message,'error')}finally{save.disabled=false}};
  dialog.showModal();
 };
 function syncVoiceSpinLabels(){const isVoiceSpin=$('#platformTitle').value.trim().toUpperCase()==='VOICESPIN';$('#newAccessUsernameLabel').firstChild.textContent=isVoiceSpin?'Agente / Extensión':'Usuario';$('#newAccessPasswordLabel').firstChild.textContent=isVoiceSpin?'Extension Secret':'Contraseña';if(isVoiceSpin){$('#newAccessUsername').placeholder='Ej.: 2797';$('#newAccessPassword').placeholder='Aa123456!';}else{$('#newAccessUsername').placeholder='';$('#newAccessPassword').placeholder='';}}
