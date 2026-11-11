@@ -468,8 +468,10 @@ const platformUrls={
  'COMIDAS LANSEL':'https://comidalansel.vercel.app/'
 };
 addBulkRow();
+const defaultPlatformUrls={...platformUrls};
 async function refreshPlatformCatalog(){
  const preset=$('#platformPreset'),old=preset.value;
+ for(const key of Object.keys(platformUrls))delete platformUrls[key];Object.assign(platformUrls,defaultPlatformUrls);
  for(const opt of [...preset.options])if(opt.dataset.custom==='true')opt.remove();
  for(const [name,url] of Object.entries(platformUrls))if(![...preset.options].some(o=>o.value===name)){const opt=new Option(name,name);opt.dataset.custom='true';preset.append(opt)}
  if(activeCompanyId||currentAdminRole!=='superadmin'){
