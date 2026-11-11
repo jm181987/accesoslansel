@@ -1,3 +1,7 @@
+## Empresa de los funcionarios
+
+El formulario **Crear funcionario** exige seleccionar una empresa. El listado **Funcionarios** muestra una columna **Empresa**. El superadministrador puede cambiar la empresa desde **Editar funcionario**; un administrador de empresa solo puede consultar y administrar usuarios de su propia empresa. Los usuarios existentes permanecen en **LANSEL Principal**. Cambiar la empresa de un funcionario invalida sus sesiones y tokens de extensión, pero conserva las asignaciones de acceso; debe volver a vincular su extensión. La extensión v1.3.3 no necesita actualizarse.
+
 ## Multiempresa / multisucursal
 
 - El panel administrativo incluye **Empresas** (solo superadministrador) para crear empresas y administradores de empresa.
