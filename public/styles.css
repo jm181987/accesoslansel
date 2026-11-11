@@ -77,3 +77,6 @@ header{position:relative;z-index:2;display:flex;align-items:center;justify-conte
 .expiry-item{display:flex;flex-direction:column;gap:5px;border:1px solid rgba(246,183,99,.35);border-left:4px solid #f4bc78;border-radius:10px;background:rgba(200,128,46,.09);padding:13px}
 .expiry-item strong{font-size:14px}.expiry-item span{color:var(--muted);font-size:12px}
 .expiry-actions{display:flex;flex-wrap:wrap;gap:10px}.expiry-actions button{flex:1 1 190px}
+
+/* Selector de plataforma y acción contextual en el popup de asignación */
+.platform-picker{margin-bottom:14px}.platform-picker-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap}.platform-picker-heading label{margin:0;font-weight:650}.platform-picker-heading #addPlatformButton{margin:0;padding:8px 12px;font-size:13px;white-space:nowrap}.platform-picker>select{width:100%}.platform-picker-help{display:block;margin-top:6px;color:var(--muted);font-size:12px}@media(max-width:420px){.platform-picker-heading #addPlatformButton{width:100%}}
