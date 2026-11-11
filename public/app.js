@@ -14,10 +14,48 @@ function msg(message,type='info'){
  toastTimer=setTimeout(()=>{toast.classList.remove('show');setTimeout(()=>{if(!toast.classList.contains('show'))toast.hidden=true},250)},6500);
 }
 $('#toastClose')?.addEventListener('click',()=>{clearTimeout(toastTimer);$('#toast').classList.remove('show');$('#toast').hidden=true});
-const api=async(u,o={})=>{const r=await fetch(u,{...o,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok){const err=new Error(d.error||'Error');err.status=r.status;err.details=d;throw err}return d};
+let activeCompanyId='';
+const api=async(u,o={})=>{if(activeCompanyId&&/^\/api\/(?:admin\/|users(?:\/|$))/.test(u))u+=(u.includes('?')?'&':'?')+'company_id='+encodeURIComponent(activeCompanyId);const r=await fetch(u,{...o,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok){const err=new Error(d.error||'Error');err.status=r.status;err.details=d;throw err}return d};
 const post=(u,d)=>api(u,{method:'POST',body:JSON.stringify(d)});
 const node=(tag,text)=>{const e=document.createElement(tag);e.textContent=text;return e};
-async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(me.role==='admin'){$('#adminPersonalWorkspace').append($('#personalWorkspace'));$('#personalWorkspace').querySelector('.dashboard-heading')?.classList.add('hidden');$('#admin').classList.remove('hidden');showAdminTab('overview');await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
+async function load(){try{const me=await api('/api/me');$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#logout').classList.remove('hidden');$('#who').textContent=me.name;await accesses();if(['admin','superadmin'].includes(me.role)){$('#adminPersonalWorkspace').append($('#personalWorkspace'));$('#personalWorkspace').querySelector('.dashboard-heading')?.classList.add('hidden');$('#admin').classList.remove('hidden');showAdminTab('overview');await initCompanies(me);await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData()}}catch(e){$('#login').classList.remove('hidden');$('#app').classList.add('hidden')}}
+
+async function initCompanies(me){
+ const companies=await api('/api/admin/companies');
+ const bar=$('#companyScopeBar'),scope=$('#companyScope');
+ bar.classList.remove('hidden');
+ $('#companiesTab').classList.toggle('hidden',me.role!=='superadmin');
+ scope.replaceChildren();
+ if(me.role==='superadmin'){
+  scope.append(new Option('Todas las empresas',''));
+  for(const c of companies)scope.append(new Option(c.name,String(c.id)));
+  $('#companyScopeHint').textContent='Superadministrador · elegí una empresa para limitar la vista.';
+ }else{
+  for(const c of companies)scope.append(new Option(c.name,String(c.id)));
+  $('#companyScopeHint').textContent='Administración limitada a tu empresa.';
+  scope.disabled=true;
+ }
+ scope.value=activeCompanyId;
+ scope.onchange=async()=>{activeCompanyId=scope.value;await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData();};
+ if(me.role==='superadmin')renderCompanies(companies);
+}
+function renderCompanies(companies){
+ const list=$('#companiesList');list.replaceChildren();
+ const table=document.createElement('table');table.className='matrix-table';
+ for(const c of companies){const row=document.createElement('tr');row.append(node('td',c.name),node('td','Empresa #'+c.id));table.append(row)}
+ list.append(table);
+ const select=$('#companyAdminCompany');select.replaceChildren();
+ for(const c of companies)select.append(new Option(c.name,String(c.id)));
+}
+$('#companyCreate').onsubmit=async e=>{
+ e.preventDefault();
+ try{await post('/api/admin/companies',Object.fromEntries(new FormData(e.target)));e.target.reset();await initCompanies({role:'superadmin'});msg('Empresa creada','success')}catch(err){msg(err.message,'error')}
+};
+$('#companyAdminCreate').onsubmit=async e=>{
+ e.preventDefault();const d=Object.fromEntries(new FormData(e.target));
+ try{await post('/api/admin/companies/'+d.company_id+'/admins',d);e.target.reset();msg('Administrador de empresa creado','success')}catch(err){msg(err.message,'error')}
+};
+
 async function accesses(){const items=await api('/api/accesses'),root=$('#cards');root.replaceChildren();if(!items.length)root.append(node('p','No tenés accesos asignados.'));for(const a of items){const c=node('div','');c.className='card';c.append(node('h3',a.title),node('p','Usuario: '+a.username));const link=node('a','Abrir enlace');link.href=a.url;link.target='_blank';link.rel='noopener noreferrer';link.className='action';const copy=node('button','Copiar usuario');copy.className='secondary';copy.onclick=()=>navigator.clipboard.writeText(a.username).then(()=>msg('Usuario copiado'));const show=node('button','Ver contraseña');show.onclick=async()=>{try{const p=await api('/api/accesses/'+a.id+'/password');c.querySelector('.secret')?.remove();const area=node('div','');area.className='secret';area.append(node('p',p.password));const b=node('button','Copiar contraseña');b.onclick=()=>navigator.clipboard.writeText(p.password).then(()=>msg('Contraseña copiada'));area.append(b);c.append(area);setTimeout(()=>area.remove(),30000)}catch(e){msg(e.message)}};c.append(link,copy,show);root.append(c)}}
 let employeeCache=[];
 async function users(){
@@ -31,7 +69,7 @@ async function users(){
  thead.append(tr);table.append(thead);
  const tbody=document.createElement('tbody');
  for(const u of list){
-  if(u.role!=='admin'){
+  if(u.role==='user'){
    const opt=new Option(u.name+' — '+u.email,String(u.id));select.append(opt);
    if(u.active)pairSelect.append(new Option(u.name+' — '+u.email,String(u.id)));
   }
@@ -41,7 +79,7 @@ async function users(){
   line.append(node('td',u.name),node('td',u.email));
   const status=node('td',u.active?'Activo':'Inactivo');status.className=u.active?'employee-active':'employee-inactive';line.append(status);
   const actionCell=document.createElement('td');const actions=document.createElement('div');actions.className='employee-actions';
-  if(u.role!=='admin'){
+  if(u.role==='user'){
    const profile=node('button','Ficha');profile.type='button';profile.className='secondary';profile.onclick=()=>openEmployeeProfile(u);actions.append(profile);
    const edit=node('button','Editar');edit.type='button';edit.className='secondary';edit.onclick=()=>editEmployee(u);actions.append(edit);
    const accessesButton=node('button','Accesos');accessesButton.type='button';accessesButton.className='secondary';
@@ -96,7 +134,7 @@ async function loadOverview(){
  try{
   const [people,accessList,extensions]=await Promise.all([api('/api/users'),api('/api/admin/accesses'),api('/api/admin/extensions')]);
   const linked=extensions.filter(e=>e.expires&&new Date(e.expires)>new Date()).length;
-  const nonAdmins=people.filter(u=>u.role!=='admin');
+  const nonAdmins=people.filter(u=>u.role==='user');
   const linkedIds=new Set(extensions.filter(e=>e.expires&&new Date(e.expires)>new Date()).map(e=>String(e.id)));
   const stats=[
    {label:'Funcionarios',value:nonAdmins.length,tab:'people',filter:'all'},
@@ -140,7 +178,7 @@ let adminAccessCache=[],adminExtensionCache=[];
 async function refreshAdminData(){
  try{[adminAccessCache,adminExtensionCache]=await Promise.all([api('/api/admin/accesses'),api('/api/admin/extensions')]);renderMatrix();renderAlerts();refreshGlobalSearch();showExpiryWarnings()}catch(e){msg('No se pudieron actualizar los datos administrativos: '+e.message,'error')}
  const bulk=$('#bulkEmployee'),previous=bulk.value;bulk.replaceChildren(new Option('Seleccioná un funcionario',''));
- for(const u of employeeCache.filter(x=>x.role!=='admin'&&x.active))bulk.append(new Option(u.name+' — '+u.email,String(u.id)));
+ for(const u of employeeCache.filter(x=>x.role==='user'&&x.active))bulk.append(new Option(u.name+' — '+u.email,String(u.id)));
  if(previous)bulk.value=previous;
 }
 function openEmployeeProfile(u){
@@ -162,7 +200,7 @@ function openEmployeeProfile(u){
 }
 function renderMatrix(){
  const root=$('#accessMatrix');root.replaceChildren();
- const people=employeeCache.filter(x=>x.role!=='admin');
+ const people=employeeCache.filter(x=>x.role==='user');
  const titles=[...new Set(adminAccessCache.map(a=>a.title.trim()))].sort((a,b)=>a.localeCompare(b));
  if(!people.length||!titles.length){root.textContent='No hay asignaciones para mostrar.';return}
  const table=document.createElement('table');table.className='matrix-table';
@@ -177,7 +215,7 @@ function renderMatrix(){
 function renderAlerts(){
  const root=$('#adminAlerts');root.replaceChildren();
  const now=Date.now(),seen=new Set(),alerts=[];
- for(const u of employeeCache.filter(x=>x.role!=='admin')){
+ for(const u of employeeCache.filter(x=>x.role==='user')){
   const own=adminAccessCache.filter(a=>String(a.employee_id)===String(u.id));
   if(u.active&&!own.length)alerts.push(['Sin accesos',u.name+' ('+u.email+') no tiene plataformas asignadas.']);
   const ext=adminExtensionCache.find(e=>String(e.id)===String(u.id));
