@@ -142,20 +142,25 @@ app.post('/api/users',auth,admin,run(async(req,res)=>{const {name,email,password
 app.patch('/api/admin/users/:id',auth,admin,run(async(req,res)=>{
  const id=String(req.params.id);
  if(!/^\d+$/.test(id))return res.status(400).json({error:'Funcionario inválido'});
- const {name,email,password,company_id}=req.body||{};
+ const {name,email,password,company_id,role}=req.body||{};
  if(typeof name!=='string'||!name.trim()||name.trim().length>150||typeof email!=='string'||!/^\S+@\S+\.\S+$/.test(email.trim())||email.length>254)return res.status(400).json({error:'Nombre o correo inválidos'});
  if(password!==undefined&&(typeof password!=='string'||(password.length>0&&password.length<12)||password.length>4096))return res.status(400).json({error:'La nueva contraseña debe tener al menos 12 caracteres'});
  const normalized=email.trim().toLowerCase();
  const existing=await db.query('SELECT id,role,company_id FROM employees WHERE id=$1'+tenantWhere(req),[id]);
  if(!existing.rowCount)return res.status(404).json({error:'Funcionario no encontrado'});
- if(['admin','superadmin'].includes(existing.rows[0].role)&&String(req.user.id)!==id)return res.status(403).json({error:'No se permite editar otro administrador'});
+ if(existing.rows[0].role==='superadmin'&&String(req.user.id)!==id)return res.status(403).json({error:'No se permite editar otro superadministrador'});
+ if(existing.rows[0].role==='admin'&&req.user.role!=='superadmin'&&String(req.user.id)!==id)return res.status(403).json({error:'No se permite editar otro administrador'});
+ if(role!==undefined&&(req.user.role!=='superadmin'||!['user','admin'].includes(role)))return res.status(403).json({error:'Solo el superadministrador puede asignar roles de funcionario o administrador'});
+ if(existing.rows[0].role==='superadmin'&&role!==undefined&&role!=='superadmin')return res.status(403).json({error:'El rol de superadministrador está protegido'});
  let newCompanyId=Number(existing.rows[0].company_id);
  if(company_id!==undefined){if(req.user.role!=='superadmin')return res.status(403).json({error:'Solo el superadministrador puede cambiar de empresa'});newCompanyId=Number(company_id);if(!Number.isSafeInteger(newCompanyId)||newCompanyId<1)return res.status(400).json({error:'Empresa inválida'});const company=await db.query('SELECT id FROM companies WHERE id=$1 AND active=true',[newCompanyId]);if(!company.rowCount)return res.status(400).json({error:'Empresa inexistente o inactiva'});}
  const moved=newCompanyId!==Number(existing.rows[0].company_id);
+ const nextRole=role===undefined?existing.rows[0].role:role;
+ const roleChanged=nextRole!==existing.rows[0].role;
  const hashed=password?await bcrypt.hash(password,12):null;
- const updated=await db.query('UPDATE employees SET name=$1,email=$2,password_hash=COALESCE($3,password_hash),company_id=$5 WHERE id=$4 RETURNING id,name,email,role,active,company_id',[name.trim(),normalized,hashed,id,newCompanyId]);
- if(hashed||moved){await db.query('DELETE FROM sessions WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_tokens WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_pair_codes WHERE user_id=$1',[id]);}
- await audit(req.user.id,moved?'user.company_change':hashed?'user.password_reset':'user.update',id,{email:normalized,company_id:newCompanyId,previous_company_id:moved?existing.rows[0].company_id:undefined});
+ const updated=await db.query('UPDATE employees SET name=$1,email=$2,password_hash=COALESCE($3,password_hash),company_id=$5,role=$6 WHERE id=$4 RETURNING id,name,email,role,active,company_id',[name.trim(),normalized,hashed,id,newCompanyId,nextRole]);
+ if(hashed||moved||roleChanged){await db.query('DELETE FROM sessions WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_tokens WHERE user_id=$1',[id]);await db.query('DELETE FROM extension_pair_codes WHERE user_id=$1',[id]);}
+ await audit(req.user.id,roleChanged?'user.role_change':moved?'user.company_change':hashed?'user.password_reset':'user.update',id,{email:normalized,company_id:newCompanyId,previous_company_id:moved?existing.rows[0].company_id:undefined,previous_role:roleChanged?existing.rows[0].role:undefined,new_role:roleChanged?nextRole:undefined});
  res.set('Cache-Control','no-store').json(updated.rows[0]);
 }));
 
