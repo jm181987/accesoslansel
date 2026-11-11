@@ -28,7 +28,7 @@ async function load(){try{const me=await api('/api/me');$('#login').classList.ad
 
 async function initCompanies(me){
  const companies=await api('/api/admin/companies');
- availableCompanies=companies;currentAdminRole=me.role;syncNewUserCompany();updateBrandCompany();
+ availableCompanies=companies;currentAdminRole=me.role;syncNewUserCompany();updateBrandCompany();await refreshPlatformCatalog();
  const bar=$('#companyScopeBar'),scope=$('#companyScope');
  bar.classList.remove('hidden');
  $('#companiesTab').classList.toggle('hidden',me.role!=='superadmin');
@@ -43,7 +43,7 @@ async function initCompanies(me){
   scope.disabled=true;
  }
  scope.value=activeCompanyId;
- scope.onchange=async()=>{activeCompanyId=scope.value;syncNewUserCompany();updateBrandCompany();await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData();};
+ scope.onchange=async()=>{activeCompanyId=scope.value;syncNewUserCompany();updateBrandCompany();await refreshPlatformCatalog();await users();await managedAccesses();await loadExtensionVersions();await loadOverview();await refreshAdminData();};
  if(me.role==='superadmin')renderCompanies(companies);
 }
 function renderCompanies(companies){
@@ -468,6 +468,27 @@ const platformUrls={
  'COMIDAS LANSEL':'https://comidalansel.vercel.app/'
 };
 addBulkRow();
+async function refreshPlatformCatalog(){
+ const preset=$('#platformPreset'),old=preset.value;
+ for(const opt of [...preset.options])if(opt.dataset.custom==='true')opt.remove();
+ for(const [name,url] of Object.entries(platformUrls))if(![...preset.options].some(o=>o.value===name)){const opt=new Option(name,name);opt.dataset.custom='true';preset.append(opt)}
+ if(activeCompanyId||currentAdminRole!=='superadmin'){
+  const rows=await api('/api/admin/platforms');
+  for(const p of rows){platformUrls[p.name]=p.url;if(![...preset.options].some(o=>o.value===p.name)){const opt=new Option(p.name,p.name);opt.dataset.custom='true';preset.append(opt)}}
+ }
+ preset.value=[...preset.options].some(o=>o.value===old)?old:'';
+}
+$('#addPlatformButton').onclick=()=>{
+ if(currentAdminRole==='superadmin'&&!activeCompanyId){msg('Seleccioná primero una empresa activa','error');return}
+ const dialog=document.createElement('dialog');dialog.className='admin-dialog';
+ const form=document.createElement('form');form.className='employee-edit-form';
+ const heading=node('h2','Agregar plataforma');form.append(heading);
+ const nameLabel=document.createElement('label');nameLabel.textContent='Nombre de plataforma';const nameInput=document.createElement('input');nameInput.required=true;nameInput.maxLength=120;nameLabel.append(nameInput);
+ const urlLabel=document.createElement('label');urlLabel.textContent='Enlace HTTPS';const urlInput=document.createElement('input');urlInput.type='url';urlInput.required=true;urlInput.placeholder='https://...';urlLabel.append(urlInput);
+ const actions=document.createElement('div');actions.className='employee-actions';const cancel=node('button','Cancelar');cancel.type='button';cancel.className='secondary';cancel.onclick=()=>dialog.close();const save=node('button','Guardar plataforma');save.type='submit';actions.append(cancel,save);form.append(nameLabel,urlLabel,actions);dialog.append(form);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());
+ form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const name=nameInput.value.trim(),url=urlInput.value.trim();await post('/api/admin/platforms',{name,url,company_id:activeCompanyId||availableCompanies[0]?.id});platformUrls[name]=url;await refreshPlatformCatalog();$('#platformPreset').value=name;$('#platformTitle').value=name;$('#newAccess').elements.url.value=url;syncVoiceSpinLabels();dialog.close();msg('Plataforma guardada','success')}catch(err){msg(err.message,'error')}finally{save.disabled=false}};
+ dialog.showModal();
+};
 function syncVoiceSpinLabels(){const isVoiceSpin=$('#platformTitle').value.trim().toUpperCase()==='VOICESPIN';$('#newAccessUsernameLabel').firstChild.textContent=isVoiceSpin?'Agente / Extensión':'Usuario';$('#newAccessPasswordLabel').firstChild.textContent=isVoiceSpin?'Extension Secret':'Contraseña';if(isVoiceSpin){$('#newAccessUsername').placeholder='Ej.: 2797';$('#newAccessPassword').placeholder='Aa123456!';}else{$('#newAccessUsername').placeholder='';$('#newAccessPassword').placeholder='';}}
 $('#platformTitle').addEventListener('input',syncVoiceSpinLabels);
 $('#platformPreset').addEventListener('change',e=>{
